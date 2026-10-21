@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { audioSettings, startMusic, stopMusic, toggleAllSound } from '../audio/audio'
+import SoundIcon from './SoundIcon.vue'
 import { consumeControlsHint } from '../game/hintSeen'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { Game, type HudState } from '../game/game'
@@ -66,6 +68,7 @@ const hintAllowed = consumeControlsHint()
 const showHint = computed(() => hintAllowed && hud.value.status !== 'finished' && hud.value.ticks < 360)
 
 onMounted(() => {
+  startMusic()
   if (!column.value || !canvas.value) return
   game = new Game(canvas.value, column.value, props.theme, (h) => {
     hud.value = h
@@ -74,6 +77,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopMusic()
   game?.dispose()
   game = null
 })
@@ -116,6 +120,14 @@ async function copyReplay(): Promise<void> {
         <div class="pill time">{{ timeText }}</div>
         <div class="pill deaths" title="Deaths">✕ {{ hud.deaths }}</div>
         <div class="spacer" />
+        <button
+          class="pill btn"
+          type="button"
+          :aria-label="audioSettings.sfx || audioSettings.music ? 'Mute' : 'Unmute'"
+          @click="toggleAllSound"
+        >
+          <SoundIcon :on="audioSettings.sfx || audioSettings.music" :size="18" />
+        </button>
         <button class="pill btn" type="button" aria-label="Restart" @click="restart">↻</button>
         <button class="pill btn" type="button" :aria-label="exitText" @click="emit('exit')">{{ exitIcon }}</button>
       </div>

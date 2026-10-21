@@ -3,6 +3,8 @@ import { computed, ref, watch } from 'vue'
 import EditorView from './components/EditorView.vue'
 import CampaignView from './components/CampaignView.vue'
 import GameView from './components/GameView.vue'
+import SoundIcon from './components/SoundIcon.vue'
+import { audioSettings } from './audio/audio'
 import { loadProgress, recordResult } from './game/progress'
 import { themeById } from './game/theme'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from './levels'
@@ -165,6 +167,29 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
         <span class="opt" :class="{ on: !dark }">☀ Light</span>
         <span class="opt" :class="{ on: dark }">☾ Dark</span>
       </button>
+
+      <div class="snd-row">
+        <button
+          class="snd"
+          :class="{ on: audioSettings.music }"
+          type="button"
+          role="switch"
+          :aria-checked="audioSettings.music"
+          @click="audioSettings.music = !audioSettings.music"
+        >
+          <SoundIcon kind="music" :on="audioSettings.music" :size="17" /> Music
+        </button>
+        <button
+          class="snd"
+          :class="{ on: audioSettings.sfx }"
+          type="button"
+          role="switch"
+          :aria-checked="audioSettings.sfx"
+          @click="audioSettings.sfx = !audioSettings.sfx"
+        >
+          <SoundIcon kind="sound" :on="audioSettings.sfx" :size="17" /> Sound
+        </button>
+      </div>
 
       <ul class="tips">
         <li><b>◀ ▶</b> to move, gravity does the rest</li>
@@ -348,5 +373,30 @@ h1 {
   font-weight: 700;
   line-height: 1.7;
   text-align: center;
+}
+
+.snd-row {
+  display: flex;
+  gap: 10px;
+}
+
+.snd {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--muted);
+  background: transparent;
+  border: 3px solid var(--outline);
+  border-radius: 999px;
+}
+
+.snd.on {
+  color: var(--outline);
+  background: var(--accent);
 }
 </style>

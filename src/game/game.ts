@@ -2,11 +2,18 @@ import {
   DT,
   MAX_REPLAY_TICKS,
   PLAYER_H,
+  TILE,
+  K_BELT_L,
+  K_BELT_R,
+  K_ICE,
   World,
   encodeInputs,
+  laserPhase,
   type CompiledLevel,
   type InputDir,
+  type LaserPhase,
 } from '../sim'
+import { duckMusic, playSfx, setLoop, stopAllLoops } from '../audio/audio'
 import { InputController } from './input'
 import { Renderer } from './renderer'
 import type { Theme } from './theme'
@@ -54,6 +61,9 @@ export class Game {
   private newBest = false
   private replay = ''
   private resizeObs: ResizeObserver | null = null
+  private bestTimer = 0
+  private lastCountdown = 0
+  private laserPrev: LaserPhase[] = []
   private disposed = false
 
   constructor(
@@ -90,7 +100,19 @@ export class Game {
 
   restart(): void {
     this.world = new World(this.level)
-    this.world.onEvent = (e) => this.renderer.handleEvent(e, this.world)
+    window.clearTimeout(this.bestTimer)
+    stopAllLoops()
+    this.lastCountdown = 0
+    this.laserPrev = this.level.lasers.map((l) => laserPhase(l, 0))
+    this.world.onEvent = (e) => {
+      this.renderer.handleEvent(e, this.world)
+      if (e.type === 'spring') playSfx('spring')
+      else if (e.type === 'death') playSfx('death')
+      else if (e.type === 'checkpoint') playSfx('checkpoint')
+      else if (e.type === 'hammer') playSfx('hammer')
+      else if (e.type === 'crumble') playSfx('crumble')
+      else if (e.type === 'respawn') playSfx('respawn')
+    }
     this.renderer.reset()
     this.inputCount = 0
     this.acc = 0
@@ -103,6 +125,8 @@ export class Game {
 
   dispose(): void {
     this.disposed = true
+    window.clearTimeout(this.bestTimer)
+    stopAllLoops()
     cancelAnimationFrame(this.raf)
     this.raf = 0
     this.input.dispose()
@@ -135,6 +159,13 @@ export class Game {
       if (this.countdownMs <= 0) {
         this.status = 'running'
         this.acc = 0
+        playSfx('go')
+      } else {
+        const cd = Math.ceil(this.countdownMs / COUNTDOWN_STEP_MS)
+        if (cd !== this.lastCountdown) {
+          this.lastCountdown = cd
+          playSfx('countdown')
+        }
       }
       this.emitHud()
     } else if (this.status === 'running') {
@@ -146,6 +177,7 @@ export class Game {
         this.world.step(dir)
         if (this.world.finished) this.finish()
       }
+      if (this.status === 'running') this.ambientSounds()
       this.emitHud()
     }
 
@@ -162,7 +194,31 @@ export class Game {
       this.bestTicks = t
       this.writeBest(t)
     }
+    stopAllLoops()
+    playSfx('finish')
+    duckMusic(2200)
+    if (this.newBest) this.bestTimer = window.setTimeout(() => playSfx('newBest'), 700)
     this.emitHud()
+  }
+
+  /** Laser-Takt und Geräusche der Untergründe; Laser nur, wenn sie im Bild liegen */
+  private ambientSounds(): void {
+    const w = this.world
+    const lasers = this.level.lasers
+    for (let i = 0; i < lasers.length; i++) {
+      const ph = laserPhase(lasers[i], w.tick)
+      if (ph === this.laserPrev[i]) continue
+      this.laserPrev[i] = ph
+      if (!lasers[i].beam || ph === 'off') continue
+      const y = (lasers[i].row + 0.5) * TILE
+      if (y < this.renderer.camY - TILE || y > this.renderer.camY + this.renderer.viewH + TILE) continue
+      playSfx(ph === 'warn' ? 'laserWarn' : 'laserOn')
+    }
+
+    const p = w.p
+    const grounded = p.onGround && !p.dead
+    setLoop('ice', grounded && w.surface === K_ICE && Math.abs(p.vx) > 12)
+    setLoop('belt', grounded && (w.surface === K_BELT_L || w.surface === K_BELT_R))
   }
 
   private emitHud(): void {

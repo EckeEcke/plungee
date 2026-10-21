@@ -46,6 +46,8 @@ export type SimEvent =
   | { type: 'land'; strength: number }
   | { type: 'hammer'; index: number; x: number; y: number; strength: number }
   | { type: 'checkpoint'; index: number }
+  /** Eine brüchige Plattform beginnt zu zerbröckeln (einmal pro Betreten) */
+  | { type: 'crumble' }
   | { type: 'finish'; ticks: number }
 
 export interface PlayerState {
@@ -361,14 +363,19 @@ export class World {
     if (row < 0 || row >= lv.rows) return
     const left = Math.max(0, Math.floor(p.x / TILE))
     const right = Math.min(lv.cols - 1, Math.floor((p.x + PLAYER_W - EPS) / TILE))
+    let crumbled = false
     for (let c = left; c <= right; c++) {
       const i = row * lv.cols + c
       const k = lv.kind[i]
-      if (k === K_BRITTLE && this.crumble[i] < 0) this.crumble[i] = this.tick
+      if (k === K_BRITTLE && this.crumble[i] < 0) {
+        this.crumble[i] = this.tick
+        crumbled = true
+      }
       if (k === K_ICE || k === K_BELT_L || k === K_BELT_R) {
         if (this.surface === 0) this.surface = k
       }
     }
+    if (crumbled) this.emit({ type: 'crumble' })
   }
 
   private moveX(dx: number): void {
