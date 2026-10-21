@@ -1,0 +1,57 @@
+import { LevelBuilder } from '../../sim/builder'
+import type { LevelData } from '../../sim/types'
+
+export function createJumpX2Level(): LevelData {
+  const b = new LevelBuilder('short', "Jump Jump 2")
+
+  // Blöcke
+  b.plat(3, 5, 10)
+  b.plat(12, 5, 5)
+  b.plat(12, 10, 10)
+  b.plat(13, 4, 5)
+  b.plat(13, 10, 11)
+  b.plat(14, 3, 5)
+  b.plat(14, 10, 12)
+  b.plat(15, 0, 5)
+  b.plat(15, 10, 15)
+  b.plat(16, 0, 5)
+  b.plat(16, 10, 15)
+  b.plat(17, 0, 5)
+  b.plat(17, 10, 15)
+  b.plat(18, 0, 5)
+  b.plat(18, 10, 15)
+  b.plat(26, 3, 3)
+  b.plat(26, 12, 12)
+  b.plat(27, 3, 4)
+  b.plat(27, 11, 12)
+  b.plat(28, 3, 5)
+  b.plat(28, 10, 12)
+  b.plat(29, 3, 12)
+  b.plat(39, 0, 15)
+
+  // Objekte
+  b.spawn(8, 2)
+  b.goal(8, 38)
+  b.spring(0, 14, 2)
+  b.spring(1, 14, 2)
+  b.spring(14, 14, 2)
+  b.spring(15, 14, 2)
+  b.spring(6, 28, 2)
+  b.spring(7, 28, 2)
+  b.spring(8, 28, 2)
+  b.spring(9, 28, 2)
+  b.spikes(5, 11, 'u')
+  b.spikes(10, 11, 'u')
+  b.spikes(4, 12, 'u')
+  b.spikes(11, 12, 'u')
+  b.spikes(3, 13, 'u')
+  b.spikes(12, 13, 'u')
+  b.spikes(3, 25, 'u')
+  b.spikes(12, 25, 'u')
+  b.spikes(4, 26, 'u')
+  b.spikes(11, 26, 'u')
+  b.spikes(5, 27, 'u')
+  b.spikes(10, 27, 'u')
+
+  return b.build()
+}

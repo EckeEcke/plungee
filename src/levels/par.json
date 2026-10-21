@@ -1,0 +1,182 @@
+{
+  "easy/01-easy-peasy": {
+    "hash": "ad8a193d",
+    "ticks": 148
+  },
+  "easy/02-speed-test": {
+    "hash": "05ab6514",
+    "ticks": 248
+  },
+  "easy/03.springs": {
+    "hash": "8a6b1fd0",
+    "ticks": null
+  },
+  "easy/04-hammer-time": {
+    "hash": "96a89e3e",
+    "ticks": 156
+  },
+  "easy/05-breakout": {
+    "hash": "8c064ccd",
+    "ticks": 388
+  },
+  "easy/06-from-the-bottom": {
+    "hash": "6932658e",
+    "ticks": null
+  },
+  "easy/07-hole-in-one": {
+    "hash": "16233f69",
+    "ticks": 220
+  },
+  "easy/08-jump-jump": {
+    "hash": "e822fbfd",
+    "ticks": null
+  },
+  "easy/09-lasers": {
+    "hash": "eeb59cf0",
+    "ticks": 168
+  },
+  "easy/10-up-and-down": {
+    "hash": "eee80a2f",
+    "ticks": null
+  },
+  "easy/11-drop-it-like-it-shot": {
+    "hash": "c42c5aac",
+    "ticks": 188
+  },
+  "easy/12-saw-ry-not-saw-ry": {
+    "hash": "822d1089",
+    "ticks": 308
+  },
+  "easy/13-jump-x2": {
+    "hash": "5bf26488",
+    "ticks": null
+  },
+  "easy/14-ice-to-meet-you": {
+    "hash": "fef69dfe",
+    "ticks": 524
+  },
+  "easy/15-more-springs": {
+    "hash": "f3f724f8",
+    "ticks": null
+  },
+  "hard/01-friend-or-enemy": {
+    "hash": "58c1a5ac",
+    "ticks": 404
+  },
+  "hard/02-hard-knock-life": {
+    "hash": "bf240bde",
+    "ticks": null
+  },
+  "hard/03-help-me-over": {
+    "hash": "3b30f143",
+    "ticks": 300
+  },
+  "hard/04-bold-springs": {
+    "hash": "2e82371a",
+    "ticks": 368
+  },
+  "hard/05-are-we-golfing-now": {
+    "hash": "b2cf70b7",
+    "ticks": null
+  },
+  "hard/06-pachinko": {
+    "hash": "ae83beae",
+    "ticks": 136
+  },
+  "hard/07-from-the-bottom2": {
+    "hash": "f5249cb5",
+    "ticks": null
+  },
+  "hard/08-freefall": {
+    "hash": "32156ab6",
+    "ticks": 468
+  },
+  "hard/09-fast-and-slow": {
+    "hash": "f1bc4849",
+    "ticks": null
+  },
+  "hard/10-shortcut": {
+    "hash": "52946a16",
+    "ticks": 432
+  },
+  "hard/11-running-in-the90s": {
+    "hash": "cd88949b",
+    "ticks": 976
+  },
+  "hard/12-slow-down": {
+    "hash": "9e7b63d7",
+    "ticks": 648
+  },
+  "hard/13-pachinko2": {
+    "hash": "6ff735af",
+    "ticks": 256
+  },
+  "hard/14-imreallysaw-ry": {
+    "hash": "e3ace63a",
+    "ticks": null
+  },
+  "hard/15-marathon": {
+    "hash": "058eecfb",
+    "ticks": null
+  },
+  "normal/01-find-the-gap": {
+    "hash": "fb94a349",
+    "ticks": 548
+  },
+  "normal/02-make-achoice": {
+    "hash": "be903114",
+    "ticks": 432
+  },
+  "normal/03-turbo-tumble": {
+    "hash": "3345ce64",
+    "ticks": 932
+  },
+  "normal/04-left-or-right": {
+    "hash": "0c844f08",
+    "ticks": 432
+  },
+  "normal/05-stop-and-go": {
+    "hash": "5414de90",
+    "ticks": 976
+  },
+  "normal/06-saw-ry-not-saw-ry2": {
+    "hash": "ad70c850",
+    "ticks": null
+  },
+  "normal/07-speedway": {
+    "hash": "61d6c735",
+    "ticks": 1016
+  },
+  "normal/08-fall-to-your-doom": {
+    "hash": "75e616f9",
+    "ticks": 400
+  },
+  "normal/09-ice-to-meet-you2": {
+    "hash": "a7f492fa",
+    "ticks": 1264
+  },
+  "normal/10-ice-ice-plungee": {
+    "hash": "85738263",
+    "ticks": 684
+  },
+  "normal/11-don-tcheat": {
+    "hash": "965d13ce",
+    "ticks": 628
+  },
+  "normal/12-breakout2": {
+    "hash": "d6b4da10",
+    "ticks": null
+  },
+  "normal/13-mission-impossible": {
+    "hash": "5473405a",
+    "ticks": 1264
+  },
+  "normal/14-saw-ry-for-that": {
+    "hash": "804bd913",
+    "ticks": 336
+  },
+  "normal/15-watch-your-step": {
+    "hash": "70f32157",
+    "ticks": 512
+  }
+}
