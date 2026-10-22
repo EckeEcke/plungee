@@ -4,7 +4,7 @@ import { reactive, watch } from 'vue'
  * Sound: kurze Effekte (Web Audio, vorab dekodiert) und Musik (gestreamt über ein Audio-Element).
  *
  * Die Dateien liegen als mp3 in src/assets/audio/:
- *   sfx/click.mp3, spring.mp3, death.mp3, finish.mp3, new-best.mp3, checkpoint.mp3, hammer.mp3, crumble.mp3
+ *   sfx/click.mp3, spring.mp3, death.mp3, finish.mp3, new-best.mp3, checkpoint.mp3, hammer.mp3, crumble.mp3, land.mp3
  *   music/*.mp3 (beliebig viele Titel, werden nacheinander gespielt)
  * Fehlt eine Datei, bleibt der jeweilige Sound einfach stumm.
  *
@@ -25,6 +25,9 @@ export type SfxId =
   | 'respawn'
   | 'laserWarn'
   | 'laserOn'
+  | 'place'
+  | 'erase'
+  | 'land'
 
 /** Dauerhaft laufende Geräusche, solange eine Bedingung gilt (Eis, Förderband) */
 export type LoopId = 'ice' | 'belt'
@@ -53,6 +56,10 @@ export const SFX: Record<SfxId, SfxConfig> = {
   respawn: { file: 'respawn', volume: 0.7, spread: 0.05, minGapMs: 200 },
   laserWarn: { file: 'laser-warn', volume: 0.5, spread: 0, minGapMs: 250 },
   laserOn: { file: 'laser-on', volume: 0.6, spread: 0, minGapMs: 250 },
+  place: { file: 'click', volume: 0.25, spread: 0.08, minGapMs: 70 },
+  erase: { file: 'crumble', volume: 0.5, spread: 0.08, minGapMs: 90 },
+  // Dezenter Aufprall; die Lautstärke wächst mit der Fallgeschwindigkeit (siehe game.ts)
+  land: { file: 'land', volume: 2, spread: 0.06, minGapMs: 120 },
 }
 
 export const LOOPS: Record<LoopId, { file: string; volume: number }> = {

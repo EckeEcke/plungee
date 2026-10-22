@@ -40,7 +40,6 @@ const hud = shallowRef<HudState>({
   newBest: false,
   replay: '',
 })
-const copied = ref(false)
 let game: Game | null = null
 
 const cssVars = computed(() => ({
@@ -101,15 +100,6 @@ function restart(): void {
   game?.restart()
 }
 
-async function copyReplay(): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(hud.value.replay)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 1600)
-  } catch {
-    /* Zwischenablage nicht verfügbar */
-  }
-}
 </script>
 
 <template>
@@ -181,9 +171,6 @@ async function copyReplay(): Promise<void> {
             <button class="ghost" type="button" @click="emit('exit')">{{ exitText }}</button>
           </div>
           <button v-if="hasNext" class="cta next" type="button" @click="emit('next')">Next level ▶</button>
-          <button class="link" type="button" @click="copyReplay">
-            {{ copied ? 'Copied!' : `Copy replay code (${hud.replay.length} chars)` }}
-          </button>
         </div>
       </div>
       </Transition>
@@ -592,17 +579,6 @@ async function copyReplay(): Promise<void> {
 .cta:active {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--outline);
-}
-
-.link {
-  margin-top: 12px;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: underline;
-  cursor: pointer;
 }
 
 /* Intro banner and result card fade out instead of vanishing */

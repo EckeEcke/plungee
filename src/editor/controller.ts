@@ -1,3 +1,4 @@
+import { playSfx } from '../audio/audio'
 import { Renderer } from '../game/renderer'
 import type { Theme } from '../game/theme'
 import { LEVEL_COLS, LEVEL_WIDTH, TILE, World, compileLevelUnchecked, type EntityData } from '../sim'
@@ -143,7 +144,7 @@ export class EditorController {
   deleteSelected(): void {
     const e = this.selectedEntity
     if (!e) return
-    this.doc.remove(e)
+    if (this.doc.remove(e)) playSfx('erase')
     this.selected = null
     this.onUi()
   }
@@ -309,10 +310,12 @@ export class EditorController {
     const { c, r } = cell
     switch (this.tool) {
       case 'tile':
-        this.doc.paintTile(c, r, this.paintErase ? false : this.brush.tile)
+        if (this.doc.paintTile(c, r, this.paintErase ? false : this.brush.tile)) {
+          playSfx(this.paintErase ? 'erase' : 'place')
+        }
         return
       case 'erase':
-        this.doc.eraseCell(c, r)
+        if (this.doc.eraseCell(c, r)) playSfx('erase')
         return
       default: {
         const ent = makeEntity(this.tool, c, r, this.brush)
@@ -321,11 +324,11 @@ export class EditorController {
           // Zweites Antippen mit gleichen Werten entfernt das Objekt wieder
           const existing = this.doc.findEntity(ent.t, c, r)
           if (existing && JSON.stringify(existing) === JSON.stringify(ent)) {
-            this.doc.remove(existing)
+            if (this.doc.remove(existing)) playSfx('erase')
             return
           }
         }
-        this.doc.place(ent)
+        if (this.doc.place(ent)) playSfx('place')
       }
     }
   }

@@ -2,6 +2,7 @@ import {
   DT,
   MAX_REPLAY_TICKS,
   PLAYER_H,
+  TERMINAL_VY,
   TILE,
   K_BELT_L,
   K_BELT_R,
@@ -38,6 +39,8 @@ export interface HudState {
 }
 
 const STEP_MS = DT * 1000
+/** Aufprallgeschwindigkeit, ab der die Landung zu hören ist (volle Fallgeschwindigkeit = TERMINAL_VY) */
+const LAND_SOUND_VY = 200
 const COUNTDOWN_STEP_MS = 650
 
 /**
@@ -112,6 +115,11 @@ export class Game {
       else if (e.type === 'hammer') playSfx('hammer')
       else if (e.type === 'crumble') playSfx('crumble')
       else if (e.type === 'respawn') playSfx('respawn')
+      else if (e.type === 'land' && e.strength > LAND_SOUND_VY) {
+        // Nur nach schnellem Fall hörbar, dezent und mit der Geschwindigkeit lauter
+        const k = Math.min(1, (e.strength - LAND_SOUND_VY) / (TERMINAL_VY - LAND_SOUND_VY))
+        playSfx('land', 0.35 + 0.65 * k)
+      }
     }
     this.renderer.reset()
     this.inputCount = 0
