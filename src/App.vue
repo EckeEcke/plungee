@@ -84,7 +84,9 @@ const cssVars = computed(() => ({
   '--accent': theme.value.ui.accent,
   '--muted': theme.value.ui.muted,
   '--player': theme.value.player,
+  '--player-shade': theme.value.playerShade,
   '--outline': theme.value.outline,
+  '--line': theme.value.ui.line,
   '--solid': theme.value.solid,
   '--danger': theme.value.danger,
   '--help': theme.value.help,
@@ -144,9 +146,20 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
     <div class="content">
       <div class="logo">
-        <span class="face" aria-hidden="true">
-          <i class="eye l" /><i class="eye r" />
-        </span>
+        <!-- Gleiche Zeichnung wie der Spielcharakter (renderer.ts drawPlayer) -->
+        <svg class="face" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <clipPath id="face-body"><rect x="6" y="6" width="52" height="52" rx="17" /></clipPath>
+          </defs>
+          <rect x="6" y="6" width="52" height="52" rx="17" class="f-body" />
+          <rect x="6" y="41" width="52" height="17" clip-path="url(#face-body)" class="f-shade" />
+          <ellipse cx="17.7" cy="16.4" rx="7.4" ry="4.3" transform="rotate(-28.6 17.7 16.4)" class="f-gloss" />
+          <rect x="6" y="6" width="52" height="52" rx="17" class="f-line" />
+          <circle cx="18.6" cy="27.7" r="10.8" class="f-eye" />
+          <circle cx="45.4" cy="27.7" r="10.8" class="f-eye" />
+          <circle cx="18.6" cy="27.7" r="5.4" class="f-pupil" />
+          <circle cx="45.4" cy="27.7" r="5.4" class="f-pupil" />
+        </svg>
         <h1>PLUNGEE</h1>
         <p>Fall fast. Land smart.</p>
       </div>
@@ -236,43 +249,39 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
 .face {
   display: inline-block;
-  position: relative;
-  width: 64px;
-  height: 64px;
-  background: var(--player);
-  border: 4px solid var(--outline);
-  border-radius: 18px;
-  box-shadow: 4px 4px 0 var(--outline);
+  width: 78px;
+  height: 78px;
+  overflow: visible;
+  filter: drop-shadow(4px 4px 0 var(--outline));
   animation: bob 1.8s ease-in-out infinite;
 }
 
-.eye {
-  position: absolute;
-  top: 18px;
-  width: 15px;
-  height: 17px;
-  background: #fff;
-  border-radius: 50%;
-  border: 2px solid var(--outline);
+.f-body {
+  fill: var(--player);
 }
 
-.eye::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  bottom: 2px;
-  width: 6px;
-  height: 6px;
-  background: var(--outline);
-  border-radius: 50%;
+.f-shade {
+  fill: var(--player-shade);
 }
 
-.eye.l {
-  left: 11px;
+.f-gloss {
+  fill: #fff;
+  opacity: 0.55;
 }
 
-.eye.r {
-  right: 11px;
+.f-line {
+  fill: none;
+  stroke: var(--outline);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.f-eye {
+  fill: #fff;
+}
+
+.f-pupil {
+  fill: var(--outline);
 }
 
 @keyframes bob {
@@ -333,7 +342,7 @@ h1 {
   padding: 10px 34px;
   color: var(--menu-text);
   background: transparent;
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
   border-radius: 16px;
 }
 
@@ -348,7 +357,7 @@ h1 {
   gap: 4px;
   font: inherit;
   background: var(--panel);
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
   border-radius: 999px;
 }
 
@@ -391,7 +400,7 @@ h1 {
   font-weight: 800;
   color: var(--muted);
   background: transparent;
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
   border-radius: 999px;
 }
 

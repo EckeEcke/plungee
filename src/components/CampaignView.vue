@@ -35,6 +35,7 @@ const cssVars = computed(() => ({
   '--bg1': props.theme.bgTop,
   '--bg2': props.theme.bgBottom,
   '--outline': props.theme.outline,
+  '--line': props.theme.ui.line,
 }))
 
 const done = computed(() => levels.value.filter((l) => props.progress[l.key]).length)
@@ -131,7 +132,7 @@ onMounted(async () => {
   gap: 10px;
   padding: max(10px, env(safe-area-inset-top)) 12px 10px;
   background: var(--panel);
-  border-bottom: 3px solid var(--outline);
+  border-bottom: 3px solid var(--line);
 }
 
 .title {
@@ -161,7 +162,7 @@ onMounted(async () => {
   font-weight: 900;
   color: var(--text);
   background: transparent;
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 12px;
   cursor: pointer;
 }
@@ -180,7 +181,7 @@ onMounted(async () => {
   gap: 10px;
   padding: 10px 12px;
   background: var(--panel);
-  border-bottom: 3px solid var(--outline);
+  border-bottom: 3px solid var(--line);
 }
 
 .diff-name {
@@ -206,7 +207,7 @@ onMounted(async () => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   background: transparent;
 }
 
@@ -247,7 +248,7 @@ onMounted(async () => {
   font: inherit;
   color: var(--text);
   background: var(--panel);
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
   border-radius: 16px;
   box-shadow: 3px 3px 0 var(--outline);
 }

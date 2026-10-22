@@ -52,6 +52,7 @@ const cssVars = computed(() => ({
   '--bg1': props.theme.bgTop,
   '--bg2': props.theme.bgBottom,
   '--outline': props.theme.outline,
+  '--line': props.theme.ui.line,
   '--surround': props.theme.surround,
   '--frame': props.theme.frame,
 }))
@@ -168,10 +169,13 @@ async function copyReplay(): Promise<void> {
           <div class="row">
             <span>Deaths</span><b>{{ hud.deaths }}</b>
           </div>
-          <div class="row">
+          <div class="row" :class="{ 'row-best': hud.newBest }">
             <span>Best</span><b>{{ bestText }}</b>
           </div>
-          <div v-if="hud.newBest" class="badge">New best!</div>
+          <div v-if="hud.newBest" class="badge">
+            <i v-for="n in 8" :key="n" class="spark" :style="{ '--a': n * 45 + 'deg' }" aria-hidden="true" />
+            <span class="badge-text">★ New best!</span>
+          </div>
           <div class="actions">
             <button class="cta" type="button" @click="restart">Retry</button>
             <button class="ghost" type="button" @click="emit('exit')">{{ exitText }}</button>
@@ -232,7 +236,7 @@ async function copyReplay(): Promise<void> {
 .pill {
   background: var(--panel);
   color: var(--text);
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 999px;
   padding: 6px 14px;
   font-weight: 800;
@@ -310,7 +314,7 @@ async function copyReplay(): Promise<void> {
   padding: 10px 22px 12px;
   background: var(--panel);
   color: var(--text);
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
   border-radius: 20px;
   box-shadow: 5px 5px 0 var(--outline);
   pointer-events: none;
@@ -416,7 +420,7 @@ async function copyReplay(): Promise<void> {
   width: min(100%, 340px);
   background: var(--panel);
   color: var(--text);
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
   border-radius: 24px;
   padding: 22px 22px 16px;
   text-align: center;
@@ -475,14 +479,86 @@ async function copyReplay(): Promise<void> {
 }
 
 .badge {
+  position: relative;
   display: inline-block;
   margin-top: 10px;
   background: var(--accent);
   color: var(--outline);
   font-weight: 900;
+  border: 2px solid var(--outline);
   border-radius: 999px;
   padding: 5px 14px;
   transform: rotate(-3deg);
+  /* Delay passt zum Sound, der kurz nach dem Ziel-Jingle folgt */
+  animation: badge-pop 0.6s cubic-bezier(0.2, 1.3, 0.4, 1) 0.7s both;
+}
+
+.badge-text {
+  position: relative;
+}
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0) rotate(-24deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.3) rotate(3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-3deg);
+    opacity: 1;
+  }
+}
+
+/* Funken, die beim Aufpoppen vom Badge wegfliegen */
+.spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  margin: -6.5px 0 0 -6.5px;
+  background: var(--accent);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  pointer-events: none;
+  animation: spark-fly 0.7s ease-out 0.85s both;
+}
+
+.spark:nth-child(even) {
+  background: #fff;
+  animation-duration: 0.6s;
+}
+
+@keyframes spark-fly {
+  0% {
+    transform: rotate(var(--a)) translateX(20px) scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--a)) translateX(78px) scale(1.1);
+    opacity: 0;
+  }
+}
+
+/* Die Zeile "Best" leuchtet einmal auf, wenn sie gerade verbessert wurde */
+.row-best b {
+  display: inline-block;
+  color: var(--accent);
+  animation: best-bump 0.5s ease-out 0.7s both;
+}
+
+@keyframes best-bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .actions {
@@ -499,7 +575,7 @@ async function copyReplay(): Promise<void> {
   font-weight: 900;
   border-radius: 14px;
   padding: 12px 10px;
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
 }
 
 .cta {
@@ -546,8 +622,13 @@ async function copyReplay(): Promise<void> {
   }
   .intro,
   .result,
-  .card {
+  .card,
+  .badge,
+  .row-best b {
     animation: none;
+  }
+  .spark {
+    display: none;
   }
 }
 </style>

@@ -32,7 +32,8 @@ export interface Theme {
   outline: string
   eyeWhite: string
   pupil: string
-  ui: { panel: string; text: string; accent: string; muted: string }
+  /** line: Rahmen auf Panels und Hintergründen. Im dunklen Theme ist --outline fast so dunkel wie das Panel, dort braucht es eine helle Linie. */
+  ui: { panel: string; text: string; accent: string; muted: string; line: string }
 }
 
 /** Memphis, hell: Creme-Hintergrund, Primärfarben-Konfetti (80er) */
@@ -64,7 +65,7 @@ export const MEMPHIS_LIGHT: Theme = {
   outline: '#1E1647',
   eyeWhite: '#FFFFFF',
   pupil: '#1E1647',
-  ui: { panel: 'rgba(58, 46, 122, 0.92)', text: '#FFF4E0', accent: '#FFD23F', muted: '#C9BFF5' },
+  ui: { panel: 'rgba(58, 46, 122, 0.92)', text: '#FFF4E0', accent: '#FFD23F', muted: '#C9BFF5', line: '#1E1647' },
 }
 
 /** Memphis, dunkel: Türkis, Magenta, Gelb auf Nachtblau (90er) */
@@ -96,7 +97,7 @@ export const MEMPHIS_DARK: Theme = {
   outline: '#0B0620',
   eyeWhite: '#FFFFFF',
   pupil: '#0B0620',
-  ui: { panel: 'rgba(8, 4, 28, 0.82)', text: '#FFFFFF', accent: '#FFE14D', muted: '#B9A8F0' },
+  ui: { panel: 'rgba(8, 4, 28, 0.82)', text: '#FFFFFF', accent: '#FFE14D', muted: '#B9A8F0', line: 'rgba(185, 168, 240, 0.55)' },
 }
 
 export const THEMES: Theme[] = [MEMPHIS_LIGHT, MEMPHIS_DARK]

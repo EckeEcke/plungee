@@ -102,6 +102,7 @@ const cssVars = computed(() => ({
   '--bg1': props.theme.bgTop,
   '--bg2': props.theme.bgBottom,
   '--outline': props.theme.outline,
+  '--line': props.theme.ui.line,
   '--danger': props.theme.danger,
 }))
 
@@ -837,7 +838,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: max(8px, env(safe-area-inset-top)) 8px 8px;
   background: var(--panel);
-  border-bottom: 3px solid var(--outline);
+  border-bottom: 3px solid var(--line);
 }
 
 .title {
@@ -871,7 +872,7 @@ onBeforeUnmount(() => {
   font-weight: 900;
   color: var(--text);
   background: transparent;
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 12px;
   cursor: pointer;
 }
@@ -922,7 +923,7 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   height: calc(100% - 50px);
   opacity: 0.8;
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 8px;
   touch-action: none;
   cursor: pointer;
@@ -967,7 +968,7 @@ onBeforeUnmount(() => {
   font-size: 16px;
   color: var(--text);
   background: var(--panel);
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 10px;
   opacity: 0.75;
   cursor: pointer;
@@ -1009,7 +1010,7 @@ onBeforeUnmount(() => {
 
 .bottom {
   background: var(--panel);
-  border-top: 3px solid var(--outline);
+  border-top: 3px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -1069,7 +1070,7 @@ onBeforeUnmount(() => {
   font-weight: 800;
   color: var(--text);
   background: transparent;
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 10px;
   cursor: pointer;
 }
@@ -1098,7 +1099,7 @@ onBeforeUnmount(() => {
   font-weight: 800;
   color: var(--text);
   background: transparent;
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 10px;
   cursor: pointer;
 }
@@ -1194,7 +1195,7 @@ onBeforeUnmount(() => {
   gap: 14px;
   color: var(--text);
   background: var(--panel);
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
   border-radius: 22px;
   box-shadow: 6px 6px 0 var(--outline);
 }
@@ -1248,7 +1249,7 @@ textarea {
   font-weight: 700;
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 12px;
   user-select: text;
   -webkit-user-select: text;
@@ -1275,7 +1276,7 @@ textarea {
   padding: 11px 14px;
   font-size: 15px;
   font-weight: 900;
-  border: 3px solid var(--outline);
+  border: 3px solid var(--line);
   border-radius: 14px;
   cursor: pointer;
 }
@@ -1321,7 +1322,7 @@ textarea {
   text-align: center;
   color: var(--text);
   background: var(--panel);
-  border: 2px solid var(--outline);
+  border: 2px solid var(--line);
   border-radius: 14px;
   pointer-events: none;
 }
