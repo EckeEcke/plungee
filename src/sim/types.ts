@@ -20,6 +20,11 @@ export type EntityData =
    * len = Länge der Bahn in Tiles, period = Ticks für Hin- und Rückweg, phase 0..1.
    */
   | { t: 'saw'; x: number; y: number; axis: 'h' | 'v'; len: number; period: number; phase: number }
+  /**
+   * Bewegliche Plattform (Einwegplatte, trägt den Spieler). Startzelle = linkes (h) bzw. oberes (v)
+   * Ende der Bahn, w = Breite in Tiles, len = Bahnlänge in Tiles, period/phase wie bei der Säge.
+   */
+  | { t: 'mover'; x: number; y: number; axis: 'h' | 'v'; len: number; w: number; period: number; phase: number }
 
 export interface LevelData {
   v: 1

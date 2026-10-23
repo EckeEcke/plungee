@@ -169,19 +169,19 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
         <button class="build" type="button" @click="screen = 'edit'">Build a level</button>
       </div>
 
-      <button
-        class="mode"
-        type="button"
-        role="switch"
-        :aria-checked="dark"
-        aria-label="Dark mode"
-        @click="dark = !dark"
-      >
-        <span class="opt" :class="{ on: !dark }">☀ Light</span>
-        <span class="opt" :class="{ on: dark }">☾ Dark</span>
-      </button>
-
       <div class="snd-row">
+        <button
+          class="mode"
+          type="button"
+          role="switch"
+          :aria-checked="dark"
+          aria-label="Dark mode"
+          :title="dark ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="dark = !dark"
+        >
+          <span class="opt" :class="{ on: !dark }" aria-hidden="true">☀</span>
+          <span class="opt" :class="{ on: dark }" aria-hidden="true">☾</span>
+        </button>
         <button
           class="snd"
           :class="{ on: audioSettings.music }"
@@ -353,8 +353,8 @@ h1 {
 .mode {
   cursor: pointer;
   display: flex;
-  padding: 4px;
-  gap: 4px;
+  padding: 2px;
+  gap: 2px;
   font: inherit;
   background: var(--panel);
   border: 3px solid var(--line);
@@ -362,8 +362,12 @@ h1 {
 }
 
 .opt {
-  padding: 7px 16px;
-  font-size: 14px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  font-size: 16px;
+  line-height: 1;
   font-weight: 800;
   color: var(--muted);
   border-radius: 999px;
@@ -386,6 +390,9 @@ h1 {
 
 .snd-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
   gap: 10px;
 }
 

@@ -12,6 +12,7 @@ export type ToolId =
   | 'laser'
   | 'hammer'
   | 'saw'
+  | 'mover'
   | 'select'
 
 export const TOOLS: Array<{ id: ToolId; label: string }> = [
@@ -23,6 +24,7 @@ export const TOOLS: Array<{ id: ToolId; label: string }> = [
   { id: 'laser', label: 'Laser' },
   { id: 'hammer', label: 'Hammer' },
   { id: 'saw', label: 'Saw' },
+  { id: 'mover', label: 'Mover' },
   { id: 'checkpoint', label: 'Checkpoint' },
   { id: 'spawn', label: 'Start' },
   { id: 'goal', label: 'Goal' },
@@ -36,6 +38,8 @@ export const TILE_OPTIONS: Array<{ ch: TileChar; label: string }> = [
   { ch: '>', label: 'Belt ▶' },
   { ch: 'B', label: 'Brittle' },
   { ch: '=', label: 'One-way' },
+  { ch: 'X', label: 'Blink ◆' },
+  { ch: 'O', label: 'Blink ●' },
 ]
 
 export const TILE_HINTS: Record<TileChar, string> = {
@@ -45,6 +49,8 @@ export const TILE_HINTS: Record<TileChar, string> = {
   '>': 'Conveyor belt: pushes the player right.',
   B: 'Crumbles shortly after you step on it and regrows after a few seconds.',
   '=': 'One-way platform: passable from below, solid from above.',
+  X: 'Blink block ◆: solid for 1.5 s, then gone for 1.5 s. Flickers shortly before it vanishes. Opposite of ●.',
+  O: 'Blink block ●: gone while ◆ is solid, and the other way round. Lasers shine through both.',
 }
 
 export const LASER_SPEEDS = [
@@ -67,6 +73,15 @@ export const SAW_SPEEDS = [
 
 export const SAW_LENGTHS = [2, 3, 4, 6, 8, 12] as const
 
+export const MOVER_SPEEDS = [
+  { label: 'fast', period: 120 },
+  { label: 'medium', period: 180 },
+  { label: 'slow', period: 280 },
+] as const
+
+export const MOVER_LENGTHS = [2, 3, 4, 6, 8, 12] as const
+export const MOVER_WIDTHS = [1, 2, 3, 4] as const
+
 export const HAMMER_LENGTHS = [2, 3, 4, 5] as const
 export const HAMMER_AMPLITUDES = [40, 60, 80] as const
 export const PHASE_QUARTERS = [0, 1, 2, 3] as const
@@ -86,6 +101,7 @@ export interface Brush {
   laser: Of<'laser'>
   hammer: Of<'hammer'>
   saw: Of<'saw'>
+  mover: Of<'mover'>
   /** Block-Typ für das Werkzeug "Block" */
   tile: TileChar
 }
@@ -97,6 +113,7 @@ export function defaultBrush(): Brush {
     laser: { t: 'laser', x: 0, y: 0, dir: 'd', period: 150, on: 54, phase: 0 },
     hammer: { t: 'hammer', x: 0, y: 0, len: 3, amp: 60, period: 130, phase: 0 },
     saw: { t: 'saw', x: 0, y: 0, axis: 'h', len: 4, period: 150, phase: 0 },
+    mover: { t: 'mover', x: 0, y: 0, axis: 'h', len: 4, w: 2, period: 180, phase: 0 },
     tile: '#',
   }
 }
@@ -120,6 +137,8 @@ export function makeEntity(tool: ToolId, c: number, r: number, brush: Brush): En
       return { ...brush.hammer, x: c, y: r }
     case 'saw':
       return { ...brush.saw, x: c, y: r }
+    case 'mover':
+      return { ...brush.mover, x: c, y: r }
     default:
       return null
   }
@@ -127,7 +146,7 @@ export function makeEntity(tool: ToolId, c: number, r: number, brush: Brush): En
 
 /** Welche Objekttypen haben einstellbare Parameter? */
 export function hasParams(t: EntityData['t']): boolean {
-  return t === 'spring' || t === 'spikes' || t === 'laser' || t === 'hammer' || t === 'saw'
+  return t === 'spring' || t === 'spikes' || t === 'laser' || t === 'hammer' || t === 'saw' || t === 'mover'
 }
 
 export function laserSpeedIndex(e: { period: number; on: number }): number {
@@ -151,6 +170,10 @@ export function laserPhasePatch(e: { period: number }, quarter: number) {
 
 export function sawSpeedIndex(e: { period: number }): number {
   return SAW_SPEEDS.findIndex((s) => s.period === e.period)
+}
+
+export function moverSpeedIndex(e: { period: number }): number {
+  return MOVER_SPEEDS.findIndex((s) => s.period === e.period)
 }
 
 export function hammerSpeedIndex(e: { period: number }): number {

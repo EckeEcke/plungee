@@ -2,12 +2,18 @@ import {
   HAMMER_HEAD_R,
   K_BELT_L,
   K_BELT_R,
+  BLINK_WARN,
+  K_BLINK_A,
   K_BRITTLE,
   K_EMPTY,
   K_ICE,
   K_ONEWAY,
   LEVEL_WIDTH,
+  MOVER_H,
   SAW_R,
+  blinkSolid,
+  blinkTicksLeft,
+  isBlinkKind,
   PLAYER_H,
   PLAYER_W,
   TERMINAL_VY,
@@ -20,6 +26,7 @@ import {
   type CompiledSaw,
   type CompiledLaser,
   type CompiledLevel,
+  type CompiledMover,
   type CompiledSpikes,
   type CompiledSpring,
   type Dir,
@@ -348,6 +355,7 @@ export class Renderer {
     for (const s of lv.spikes) this.drawSpikes(ctx, s)
     for (let i = 0; i < lv.springs.length; i++) this.drawSpring(ctx, lv.springs[i], this.springAnim[i])
     for (const sw of lv.saws) this.drawSaw(ctx, sw, t)
+    for (const m of lv.movers) this.drawMover(ctx, m, running ? world.tick - 1 + alpha : world.tick)
     for (const hm of lv.hammers) this.drawHammer(ctx, hm, t)
     this.drawSpeedlines(ctx, world)
     this.drawPlayer(ctx, world, alpha)
@@ -455,6 +463,10 @@ export class Renderer {
           this.drawBrittle(ctx, world, c, r)
           continue
         }
+        if (isBlinkKind(k)) {
+          this.drawBlink(ctx, world, c, r, k)
+          continue
+        }
         const up = same(c, r - 1, k)
         const down = same(c, r + 1, k)
         const left = same(c - 1, r, k)
@@ -543,6 +555,88 @@ export class Renderer {
     for (const dx of [3, 8, 13]) {
       ctx.beginPath()
       ctx.arc(x + dx, y + 3.5, 0.9, 0, TAU)
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+
+  /** Blinkblock: fest = gefüllt mit Marke, weg = gestrichelter Umriss, kurz vor dem Wechsel flackert er */
+  private drawBlink(ctx: CanvasRenderingContext2D, world: World, c: number, r: number, k: number): void {
+    const th = this.theme
+    const x = c * TILE
+    const y = r * TILE
+    const solid = blinkSolid(k, world.tick)
+    const left = blinkTicksLeft(world.tick)
+    const base = k === K_BLINK_A ? th.help : th.help2
+    ctx.save()
+    if (!solid) {
+      // Vor dem Erscheinen zeichnet sich der Umriss stärker ab
+      ctx.strokeStyle = base
+      ctx.globalAlpha = left <= BLINK_WARN ? 0.85 : 0.4
+      ctx.lineWidth = 1.2
+      ctx.setLineDash([2, 2])
+      ctx.strokeRect(x + 1.5, y + 1.5, TILE - 3, TILE - 3)
+      ctx.restore()
+      return
+    }
+    if (left <= BLINK_WARN && Math.floor(world.tick / 3) % 2 === 0) ctx.globalAlpha = 0.35
+    ctx.fillStyle = base
+    rr(ctx, x, y, TILE, TILE, 3, 3, 3, 3)
+    ctx.fill()
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'
+    rr(ctx, x, y, TILE, 5, 3, 3, 0, 0)
+    ctx.fill()
+    ctx.strokeStyle = th.outline
+    ctx.lineWidth = 1.4
+    rr(ctx, x + 0.7, y + 0.7, TILE - 1.4, TILE - 1.4, 3, 3, 3, 3)
+    ctx.stroke()
+    // Marke: Raute (X) oder Kreis (O), damit beide Typen ohne Farbe unterscheidbar sind
+    ctx.fillStyle = th.outline
+    ctx.beginPath()
+    if (k === K_BLINK_A) {
+      ctx.moveTo(x + 8, y + 5)
+      ctx.lineTo(x + 11, y + 9)
+      ctx.lineTo(x + 8, y + 13)
+      ctx.lineTo(x + 5, y + 9)
+      ctx.closePath()
+    } else {
+      ctx.arc(x + 8, y + 9, 3, 0, TAU)
+    }
+    ctx.fill()
+    ctx.restore()
+  }
+
+  /** Bewegliche Plattform: Schiene, Platte mit Pfeil-Nieten */
+  private drawMover(ctx: CanvasRenderingContext2D, m: CompiledMover, t: number): void {
+    const th = this.theme
+    const w = m.w * TILE
+    ctx.save()
+    ctx.lineCap = 'round'
+    // Schiene (Mittellinie der Platte)
+    ctx.strokeStyle = th.outline
+    ctx.globalAlpha = 0.35
+    ctx.lineWidth = 2
+    ctx.setLineDash([2, 3])
+    ctx.beginPath()
+    ctx.moveTo(m.x0 + w / 2, m.y0 + MOVER_H / 2)
+    ctx.lineTo(m.x1 + w / 2, m.y1 + MOVER_H / 2)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.globalAlpha = 1
+    const p = sawPos(m, t)
+    ctx.fillStyle = th.help
+    ctx.strokeStyle = th.outline
+    ctx.lineWidth = 1.4
+    rr(ctx, p.x, p.y, w, MOVER_H, 3, 3, 3, 3)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'
+    rr(ctx, p.x + 1, p.y + 1, w - 2, 2.5, 1.5, 1.5, 0, 0)
+    ctx.fill()
+    ctx.fillStyle = th.outline
+    for (let i = 0; i < m.w; i++) {
+      ctx.beginPath()
+      ctx.arc(p.x + i * TILE + TILE / 2, p.y + MOVER_H / 2 + 1, 1, 0, TAU)
       ctx.fill()
     }
     ctx.restore()

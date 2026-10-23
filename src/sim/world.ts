@@ -33,7 +33,7 @@ import {
 } from './constants'
 import { hammerState, laserPhase, sawPos } from './hazards'
 import type { CompiledLevel } from './level'
-import { K_BELT_L, K_BELT_R, K_BRITTLE, K_ICE, K_ONEWAY } from './tiles'
+import { blinkSolid, isBlinkKind, K_BELT_L, K_BELT_R, K_BRITTLE, K_ICE, K_ONEWAY } from './tiles'
 import { approach, clamp } from './mathx'
 import type { InputDir, Rect } from './types'
 
@@ -86,6 +86,10 @@ export class World {
   crumble: Int32Array
   /** Block-Typ unter den Füßen im letzten Tick (siehe tiles.ts), 0 = normal */
   surface = 0
+  /** Index der beweglichen Plattform, auf der der Spieler steht (-1 = keine) */
+  riding = -1
+  /** Blinkzellen, in denen der Spieler zu Beginn des Ticks steckt: bleiben durchlässig, bis er draußen ist */
+  private blinkIgnore: number[] = []
 
   constructor(level: CompiledLevel) {
     this.level = level
@@ -123,6 +127,7 @@ export class World {
     w.respawnY = this.respawnY
     w.crumble = this.crumble.slice()
     w.surface = this.surface
+    w.riding = this.riding
     return w
   }
 
@@ -161,6 +166,7 @@ export class World {
     if (p.hitCooldown > 0) p.hitCooldown--
 
     this.regrow()
+    this.collectBlinkIgnore()
 
     // Schwerkraft
     p.vy += GRAVITY * DT
@@ -170,8 +176,12 @@ export class World {
     const wasOnGround = p.onGround
     const impact = p.vy
     p.onGround = false
+    this.carry()
+    p.onGround = false
     this.moveX(p.vx * DT)
+    const bottomBefore = p.y + PLAYER_H
     this.moveY(p.vy * DT)
+    this.landOnMovers(bottomBefore)
     if (p.onGround && !wasOnGround && impact > LAND_EVENT_VY) {
       this.emit({ type: 'land', strength: impact })
     }
@@ -195,6 +205,7 @@ export class World {
     p.deadTimer = 0
     this.crumble.fill(-1)
     this.surface = 0
+    this.riding = -1
     this.prevX = p.x
     this.prevY = p.y
     this.emit({ type: 'respawn', x: p.x, y: p.y })
@@ -321,8 +332,70 @@ export class World {
     if (col < 0 || col >= lv.cols || row < 0) return true
     if (row >= lv.rows) return false
     const i = row * lv.cols + col
+    const k = lv.kind[i]
+    if (isBlinkKind(k)) return blinkSolid(k, this.tick) && !this.blinkIgnore.includes(i)
     if (lv.solid[i] !== 1) return false
-    return !(lv.kind[i] === K_BRITTLE && this.isBroken(i))
+    return !(k === K_BRITTLE && this.isBroken(i))
+  }
+
+  private collectBlinkIgnore(): void {
+    const lv = this.level
+    const p = this.p
+    this.blinkIgnore.length = 0
+    const c0 = Math.max(0, Math.floor(p.x / TILE))
+    const c1 = Math.min(lv.cols - 1, Math.floor((p.x + PLAYER_W - EPS) / TILE))
+    const r0 = Math.max(0, Math.floor(p.y / TILE))
+    const r1 = Math.min(lv.rows - 1, Math.floor((p.y + PLAYER_H - EPS) / TILE))
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const i = r * lv.cols + c
+        if (isBlinkKind(lv.kind[i])) this.blinkIgnore.push(i)
+      }
+    }
+  }
+
+  /** Oberkante-Position (links, oben) einer Plattform zu einem Tick */
+  moverPos(index: number, tick: number): { x: number; y: number } {
+    return sawPos(this.level.movers[index], tick)
+  }
+
+  /** Trägt den Spieler mit der Plattform mit, auf der er im letzten Tick stand */
+  private carry(): void {
+    if (this.riding < 0) return
+    const a = this.moverPos(this.riding, this.tick)
+    const b = this.moverPos(this.riding, this.tick + 1)
+    const p = this.p
+    const vy = p.vy
+    const vx = p.vx
+    if (b.x !== a.x) this.moveX(b.x - a.x)
+    p.vx = vx
+    if (b.y !== a.y) this.moveY(b.y - a.y)
+    p.vy = vy
+  }
+
+  /** Einweg-Landung auf beweglichen Plattformen (Pose zum Ende dieses Ticks) */
+  private landOnMovers(bottomBefore: number): void {
+    const p = this.p
+    const lv = this.level
+    const wasRiding = this.riding
+    this.riding = -1
+    if (p.vy < 0) return
+    for (let i = 0; i < lv.movers.length; i++) {
+      const m = lv.movers[i]
+      const a = this.moverPos(i, this.tick)
+      const b = this.moverPos(i, this.tick + 1)
+      const w = m.w * TILE
+      if (p.x >= b.x + w || p.x + PLAYER_W <= b.x) continue
+      const refTop = i === wasRiding ? b.y : a.y
+      if (bottomBefore > refTop + EPS || p.y + PLAYER_H < b.y - EPS) continue
+      // Steht der Spieler schon auf einem Tile, nimmt ihn nur eine von unten heranfahrende Platte mit
+      if (p.onGround && p.y + PLAYER_H - b.y <= EPS) continue
+      p.y = b.y - PLAYER_H
+      p.vy = 0
+      p.onGround = true
+      this.riding = i
+      return
+    }
   }
 
   /** Brüchige Plattform ist zerbrochen, solange sie nicht wieder nachgewachsen ist */
@@ -358,7 +431,7 @@ export class World {
     const p = this.p
     const lv = this.level
     this.surface = 0
-    if (!p.onGround) return
+    if (!p.onGround || this.riding >= 0) return
     const row = Math.floor((p.y + PLAYER_H + 0.5) / TILE)
     if (row < 0 || row >= lv.rows) return
     const left = Math.max(0, Math.floor(p.x / TILE))

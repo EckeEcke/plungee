@@ -1,6 +1,6 @@
 import { DEG_TO_RAD } from './mathx'
-import { K_BRITTLE, K_ONEWAY, K_SOLID, kindOfChar, TILE_LINE_RE } from './tiles'
-import { LASER_BEAM_W, LEVEL_COLS, LEVEL_ROWS, MAX_SAW_LEN, TILE } from './constants'
+import { isBlinkKind, K_BRITTLE, K_ONEWAY, K_SOLID, kindOfChar, TILE_LINE_RE } from './tiles'
+import { LASER_BEAM_W, LEVEL_COLS, LEVEL_ROWS, MAX_MOVER_LEN, MAX_MOVER_W, MAX_SAW_LEN, TILE } from './constants'
 import type { HammerParams, SawParams } from './hazards'
 import type { Dir, EntityData, LevelData, Rect } from './types'
 
@@ -44,6 +44,15 @@ export interface CompiledSaw extends SawParams {
   len: number
 }
 
+export interface CompiledMover extends SawParams {
+  col: number
+  row: number
+  axis: 'h' | 'v'
+  len: number
+  /** Breite in Tiles */
+  w: number
+}
+
 export interface CompiledCheckpoint {
   col: number
   row: number
@@ -72,6 +81,7 @@ export interface CompiledLevel {
   lasers: CompiledLaser[]
   hammers: CompiledHammer[]
   saws: CompiledSaw[]
+  movers: CompiledMover[]
 }
 
 const DIRS: Dir[] = ['u', 'd', 'l', 'r']
@@ -99,7 +109,7 @@ export function validateLevel(data: LevelData): string[] {
   for (let r = 0; r < rows; r++) {
     const line = data.tiles[r]
     if (typeof line !== 'string' || line.length !== LEVEL_COLS || TILE_LINE_RE.test(line)) {
-      errors.push(`Row ${r}: expected ${LEVEL_COLS} characters from . # I < > B =`)
+      errors.push(`Row ${r}: expected ${LEVEL_COLS} characters from . # I < > B = X O`)
       return errors
     }
   }
@@ -176,12 +186,27 @@ export function validateLevel(data: LevelData): string[] {
         }
         if (!(e.phase >= 0 && e.phase < 1)) errors.push(`${label}: phase 0 to < 1`)
         break
+      case 'mover':
+        if (e.axis !== 'h' && e.axis !== 'v') errors.push(`${label}: invalid axis`)
+        if (!isInt(e.w) || e.w < 1 || e.w > MAX_MOVER_W) {
+          errors.push(`${label}: width 1 to ${MAX_MOVER_W} tiles`)
+        }
+        if (!isInt(e.len) || e.len < 1 || e.len > MAX_MOVER_LEN) {
+          errors.push(`${label}: track length 1 to ${MAX_MOVER_LEN} tiles`)
+        } else if (isInt(e.w) && (e.axis === 'h' ? e.x + e.len + e.w > LEVEL_COLS : e.x + e.w > LEVEL_COLS || e.y + e.len >= rows)) {
+          errors.push(`${label}: track extends outside the level`)
+        }
+        if (!isInt(e.period) || e.period < 60 || e.period > 600) {
+          errors.push(`${label}: period 60 to 600 ticks`)
+        }
+        if (!(e.phase >= 0 && e.phase < 1)) errors.push(`${label}: phase 0 to < 1`)
+        break
       default:
         errors.push(`Unknown object "${(e as { t: string }).t}"`)
     }
 
     // Hammer-Aufhängungen und Sägen dürfen sich eine Zelle teilen, alles andere nicht.
-    if (e.t !== 'hammer' && e.t !== 'saw') {
+    if (e.t !== 'hammer' && e.t !== 'saw' && e.t !== 'mover') {
       const prev = occupied.get(key)
       if (prev) errors.push(`${label}: cell is already occupied by "${prev}"`)
       else occupied.set(key, e.t)
@@ -215,7 +240,8 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
       const k = kindOfChar(data.tiles[r][c])
       const i = r * cols + c
       kind[i] = k
-      solid[i] = k !== 0 && k !== K_ONEWAY ? 1 : 0
+      // Blinkblöcke blockieren keine Laser; ihre Festigkeit entscheidet die Welt je Tick
+      solid[i] = k !== 0 && k !== K_ONEWAY && !isBlinkKind(k) ? 1 : 0
       if (k === K_BRITTLE) brittle.push(i)
     }
   }
@@ -246,6 +272,7 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
     lasers: [],
     hammers: [],
     saws: [],
+    movers: [],
   }
 
   for (const e of data.entities) {
@@ -322,6 +349,24 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
           y0: py + TILE / 2,
           x1: px + TILE / 2 + dx,
           y1: py + TILE / 2 + dy,
+          period: e.period,
+          phase: e.phase,
+        })
+        break
+      }
+      case 'mover': {
+        const dx = e.axis === 'h' ? e.len * TILE : 0
+        const dy = e.axis === 'v' ? e.len * TILE : 0
+        level.movers.push({
+          col: e.x,
+          row: e.y,
+          axis: e.axis,
+          len: e.len,
+          w: e.w,
+          x0: px,
+          y0: py,
+          x1: px + dx,
+          y1: py + dy,
           period: e.period,
           phase: e.phase,
         })

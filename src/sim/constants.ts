@@ -49,6 +49,17 @@ export const CRUMBLE_DELAY = 30
 /** Ticks, die sie danach weg bleibt */
 export const CRUMBLE_REGROW = 150
 
+// Blinkblöcke: globaler Takt, 'X' ist in der ersten Hälfte fest, 'O' in der zweiten
+export const BLINK_PERIOD = 180
+export const BLINK_HALF = BLINK_PERIOD / 2
+/** Ticks vor dem Verschwinden, in denen der Block flackert (nur Darstellung) */
+export const BLINK_WARN = 24
+
+// Bewegliche Plattform: Einwegplatte, trägt den Spieler
+export const MOVER_H = 8
+export const MAX_MOVER_LEN = 12
+export const MAX_MOVER_W = 4
+
 // Seitenfeder
 export const SPRING_SIDE_POWER = [300, 460] as const
 export const SPRING_SIDE_LIFT = 110

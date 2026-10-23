@@ -49,6 +49,10 @@ defineProps<{ tool: ToolId }>()
         transform="translate(0 -3) scale(1)"
       />
     </template>
+    <template v-else-if="tool === 'mover'">
+      <rect x="6" y="9" width="12" height="5" rx="2" fill="currentColor" />
+      <path d="M3 18 H21" stroke-dasharray="2 3" />
+    </template>
     <template v-else-if="tool === 'checkpoint'">
       <path d="M7 21 V4" />
       <path d="M7 5 L19 9 L7 13 Z" fill="currentColor" />

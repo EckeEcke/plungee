@@ -107,6 +107,27 @@ export class LevelBuilder {
     return this
   }
 
+  /** Bewegliche Plattform: Bahn beginnt in (col,row), w Tiles breit, len Tiles lang */
+  mover(
+    col: number,
+    row: number,
+    axis: 'h' | 'v',
+    len: number,
+    opts: { w?: number; period?: number; phase?: number } = {},
+  ): this {
+    this.entities.push({
+      t: 'mover',
+      x: col,
+      y: row,
+      axis,
+      len,
+      w: opts.w ?? 2,
+      period: opts.period ?? 180,
+      phase: opts.phase ?? 0,
+    })
+    return this
+  }
+
   /** Säge: Bahn beginnt in (col,row) und läuft len Tiles nach rechts (h) bzw. unten (v) */
   saw(
     col: number,

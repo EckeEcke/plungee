@@ -20,9 +20,9 @@ export interface OverlayState {
   time: number
 }
 
-const OBJECT_TOOLS: ToolId[] = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw']
+const OBJECT_TOOLS: ToolId[] = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw', 'mover']
 /** Diese Objekte dürfen auch auf festen Wänden stehen */
-const WALL_OK: ToolId[] = ['laser', 'hammer', 'saw']
+const WALL_OK: ToolId[] = ['laser', 'hammer', 'saw', 'mover']
 
 /**
  * Editor-Hilfen über dem Spielbild: Raster, Hammer-Schwungbogen, Vorschau, Auswahl.
@@ -39,6 +39,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, s: OverlayState): voi
   drawGrid(ctx, s, height)
   drawHammerArcs(ctx, s)
   drawSawTracks(ctx, s)
+  drawMoverTracks(ctx, s)
   if (s.hover) drawGhost(ctx, s, s.hover)
   if (s.selected) drawSelection(ctx, s, s.selected)
 
@@ -184,6 +185,44 @@ function drawSawTracks(ctx: CanvasRenderingContext2D, s: OverlayState): void {
   }
 }
 
+/** Start- und Endlage der Platte (gestrichelte Umrisse), verbunden durch eine Linie */
+function drawMoverTrack(
+  ctx: CanvasRenderingContext2D,
+  color: string,
+  c: number,
+  r: number,
+  axis: 'h' | 'v',
+  len: number,
+  w: number,
+  alpha: number,
+  width: number,
+): void {
+  const x0 = c * TILE
+  const y0 = r * TILE
+  const x1 = axis === 'h' ? x0 + len * TILE : x0
+  const y1 = axis === 'v' ? y0 + len * TILE : y0
+  const pw = w * TILE
+  ctx.strokeStyle = color
+  ctx.globalAlpha = alpha
+  ctx.lineWidth = width
+  ctx.setLineDash([2, 3])
+  ctx.beginPath()
+  ctx.moveTo(x0 + pw / 2, y0 + 4)
+  ctx.lineTo(x1 + pw / 2, y1 + 4)
+  ctx.stroke()
+  ctx.strokeRect(x1 + 0.5, y1 + 0.5, pw - 1, 7)
+  ctx.setLineDash([])
+  ctx.globalAlpha = 1
+}
+
+function drawMoverTracks(ctx: CanvasRenderingContext2D, s: OverlayState): void {
+  for (const e of s.doc.entityList) {
+    if (e.t !== 'mover') continue
+    const isSel = !!s.selected && s.selected.t === 'mover' && s.selected.x === e.x && s.selected.y === e.y
+    drawMoverTrack(ctx, s.theme.help, e.x, e.y, e.axis, e.len, e.w, isSel ? 0.95 : 0.6, isSel ? 1.6 : 1)
+  }
+}
+
 function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): void {
   const th = s.theme
   const x = h.c * TILE
@@ -213,6 +252,7 @@ function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): voi
   else if (OBJECT_TOOLS.includes(tool)) {
     fill = tool === 'spring' || tool === 'checkpoint' ? th.help : tool === 'goal' ? th.goal : th.player
     if (tool === 'spikes' || tool === 'laser' || tool === 'hammer' || tool === 'saw') fill = th.danger
+    if (tool === 'mover') fill = th.help
     blocked = !WALL_OK.includes(tool) && s.doc.isSolid(h.c, h.r)
   }
   if (blocked) fill = th.dangerDark
@@ -242,6 +282,16 @@ function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): voi
     drawArrow(ctx, x + 8, y + 8, s.brush.tile === '<' ? 'l' : 'r', th.outline)
   }
   if (tool === 'saw' && !blocked) drawTrack(ctx, th.danger, h.c, h.r, s.brush.saw.axis, s.brush.saw.len, s.doc.rows, 0.55, 1)
+  if (tool === 'mover' && !blocked) {
+    const m = s.brush.mover
+    const w = Math.max(1, Math.min(m.w, LEVEL_COLS - h.c))
+    const room = m.axis === 'h' ? LEVEL_COLS - h.c - w : s.doc.rows - 1 - h.r
+    const len = Math.max(0, Math.min(m.len, room))
+    ctx.fillStyle = th.help
+    ctx.globalAlpha = 0.5
+    ctx.fillRect(x, y, w * TILE, 8)
+    if (len > 0) drawMoverTrack(ctx, th.help, h.c, h.r, m.axis, len, w, 0.6, 1)
+  }
   ctx.globalAlpha = 1
 }
 

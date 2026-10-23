@@ -21,6 +21,10 @@ import {
   laserSpeedIndex,
   laserSpeedPatch,
   sawSpeedIndex,
+  moverSpeedIndex,
+  MOVER_LENGTHS,
+  MOVER_SPEEDS,
+  MOVER_WIDTHS,
   type ToolId,
 } from '../editor/brush'
 import type { TileChar } from '../sim'
@@ -52,6 +56,7 @@ const ENTITY_LABELS: Record<EntityData['t'], string> = {
   laser: 'Laser',
   hammer: 'Hammer',
   saw: 'Saw',
+  mover: 'Mover',
 }
 const TOOL_HINTS: Record<ToolId, string> = {
   select: 'Tap an object to edit it, drag to move it.',
@@ -62,6 +67,7 @@ const TOOL_HINTS: Record<ToolId, string> = {
   laser: 'The beam runs to the next wall. It flashes before it switches on.',
   hammer: 'The pivot can sit in mid-air. The dashed arc shows the swing.',
   saw: 'The saw travels back and forth along the dashed track, even through walls. The end is clipped to the level edge.',
+  mover: 'A one-way platform that carries you along its dashed track. You can jump up through it and land on it from above.',
   checkpoint: 'Sets a respawn point. Tap again to remove it.',
   spawn: 'Tap to set the start point.',
   goal: 'Tap to set the goal.',
@@ -160,7 +166,7 @@ const target = computed<EntityData | null>(() => {
     const e = c.selectedEntity
     return e && hasParams(e.t) ? { ...e } : null
   }
-  if (tool.value === 'spring' || tool.value === 'spikes' || tool.value === 'laser' || tool.value === 'hammer' || tool.value === 'saw') {
+  if (tool.value === 'spring' || tool.value === 'spikes' || tool.value === 'laser' || tool.value === 'hammer' || tool.value === 'saw' || tool.value === 'mover') {
     // Kopie, damit Vue nach jeder Änderung neu rendert (die Pinsel-Vorlage ist nicht reaktiv)
     return { ...c.brush[tool.value] }
   }
@@ -175,6 +181,7 @@ const sk = computed(() => pick(target.value, 'spikes'))
 const ls = computed(() => pick(target.value, 'laser'))
 const hm = computed(() => pick(target.value, 'hammer'))
 const sw = computed(() => pick(target.value, 'saw'))
+const mv = computed(() => pick(target.value, 'mover'))
 
 const tileKind = computed(() => (void uiVersion.value, ctrl.value?.brush.tile ?? '#'))
 function pickTileKind(ch: TileChar): void {
@@ -184,6 +191,9 @@ function pickTileKind(ch: TileChar): void {
 }
 function swatchStyle(ch: TileChar): Record<string, string> {
   const t = props.theme
+  if (ch === 'X' || ch === 'O') {
+    return { background: ch === 'X' ? t.help : t.help2, borderColor: t.outline }
+  }
   const color = ch === 'I' ? t.ice : ch === 'B' ? t.brittle : ch === '=' ? t.solidTop : t.solid
   const top = ch === 'I' ? t.iceTop : ch === 'B' ? t.brittleTop : t.solidTop
   return ch === '='
@@ -221,7 +231,7 @@ function apply(patch: Record<string, unknown>): void {
   if (tool.value === 'select') {
     c.updateSelected(patch)
   } else {
-    const t = tool.value as 'spring' | 'spikes' | 'laser' | 'hammer' | 'saw'
+    const t = tool.value as 'spring' | 'spikes' | 'laser' | 'hammer' | 'saw' | 'mover'
     Object.assign(c.brush[t], patch)
     bump()
   }
@@ -699,6 +709,40 @@ onBeforeUnmount(() => {
                 >
                   {{ PHASE_LABELS[q] }}
                 </button>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="mv">
+            <div class="grp">
+              <span class="lbl">Track</span>
+              <div class="seg">
+                <button type="button" :class="{ on: mv.axis === 'h' }" title="horizontal" @click="apply({ axis: 'h' })">↔</button>
+                <button type="button" :class="{ on: mv.axis === 'v' }" title="vertical" @click="apply({ axis: 'v' })">↕</button>
+              </div>
+            </div>
+            <div class="grp">
+              <span class="lbl">Length</span>
+              <div class="seg">
+                <button v-for="n in MOVER_LENGTHS" :key="n" type="button" :class="{ on: mv.len === n }" @click="apply({ len: n })">{{ n }}</button>
+              </div>
+            </div>
+            <div class="grp">
+              <span class="lbl">Width</span>
+              <div class="seg">
+                <button v-for="n in MOVER_WIDTHS" :key="n" type="button" :class="{ on: mv.w === n }" @click="apply({ w: n })">{{ n }}</button>
+              </div>
+            </div>
+            <div class="grp">
+              <span class="lbl">Speed</span>
+              <div class="seg">
+                <button v-for="(s, i) in MOVER_SPEEDS" :key="s.label" type="button" :class="{ on: moverSpeedIndex(mv) === i }" @click="apply({ period: s.period })">{{ s.label }}</button>
+              </div>
+            </div>
+            <div class="grp">
+              <span class="lbl">Offset</span>
+              <div class="seg">
+                <button v-for="q in PHASE_QUARTERS" :key="q" type="button" :class="{ on: hammerPhaseQuarter(mv) === q }" @click="apply(hammerPhasePatch(q))">{{ PHASE_LABELS[q] }}</button>
               </div>
             </div>
           </template>

@@ -4,6 +4,7 @@ import {
   MAX_ENTITIES,
   TILE_CHARS,
   MAX_SAW_LEN,
+  MAX_MOVER_LEN,
   validateLevel,
   type EntityData,
   type TileChar,
@@ -226,6 +227,11 @@ export class EditorDoc {
         fitSaw(e, this.rows)
         if (e.len !== before) changed = true
       }
+      if (e.t === 'mover') {
+        const before = `${e.len},${e.w}`
+        fitMover(e, this.rows)
+        if (`${e.len},${e.w}` !== before) changed = true
+      }
       return changed
     })
   }
@@ -254,7 +260,7 @@ export class EditorDoc {
       const next = emptyTiles(rows)
       for (let r = 0; r < Math.min(rows, this.rows); r++) next[r] = [...this.tiles[r]]
       this.tiles = next
-      this.entities = this.entities.filter((e) => e.y < rows && (e.t !== 'saw' || fitSaw(e, rows)))
+      this.entities = this.entities.filter((e) => e.y < rows && (e.t !== 'saw' || fitSaw(e, rows)) && (e.t !== 'mover' || fitMover(e, rows)))
       this.size = size
       return true
     })
@@ -326,9 +332,10 @@ export class EditorDoc {
   // --- intern ----------------------------------------------------------------
 
   private placeInternal(e: EntityData): boolean {
-    const free = e.t === 'hammer' || e.t === 'laser' || e.t === 'saw'
+    const free = e.t === 'hammer' || e.t === 'laser' || e.t === 'saw' || e.t === 'mover'
     if (!free && this.tiles[e.y][e.x] !== '.') return false
     if (e.t === 'saw' && !fitSaw(e, this.rows)) return false
+    if (e.t === 'mover' && !fitMover(e, this.rows)) return false
 
     let next = this.entities
     if (e.t === 'spawn' || e.t === 'goal') next = next.filter((x) => x.t !== e.t)
@@ -406,13 +413,21 @@ function parseTiles(lines: string[], rows: number): string[][] {
 
 /** Objekte, die in einer Zelle neben einem normalen Objekt liegen dürfen */
 function isOverlay(t: EntityData['t']): boolean {
-  return t === 'hammer' || t === 'saw'
+  return t === 'hammer' || t === 'saw' || t === 'mover'
 }
 
 /** Kürzt die Bahn einer Säge, bis sie ins Level passt. false, wenn nicht einmal ein Tile Platz hat. */
 function fitSaw(e: Extract<EntityData, { t: 'saw' }>, rows: number): boolean {
   const room = e.axis === 'h' ? LEVEL_COLS - 1 - e.x : rows - 1 - e.y
   e.len = Math.min(e.len, room, MAX_SAW_LEN)
+  return e.len >= 1
+}
+
+/** Passt Breite und Bahn einer Plattform ins Level. false, wenn nicht einmal ein Tile Bahn Platz hat. */
+function fitMover(e: Extract<EntityData, { t: 'mover' }>, rows: number): boolean {
+  e.w = Math.max(1, Math.min(e.w, LEVEL_COLS - e.x))
+  const room = e.axis === 'h' ? LEVEL_COLS - e.x - e.w : rows - 1 - e.y
+  e.len = Math.min(e.len, room, MAX_MOVER_LEN)
   return e.len >= 1
 }
 
