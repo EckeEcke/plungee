@@ -20,6 +20,7 @@ describe('Audio ohne Browser-Audio', () => {
     for (const c of Object.values(SFX)) expect(c.file).toMatch(/^[a-z-]+$/)
     expect(SFX.place.file).toBe('click')
     expect(SFX.erase.file).toBe(SFX.crumble.file)
+    expect(SFX.blink.file).toBe('blink-switch')
   })
 
   it('Schnellschalter: erst alles aus, dann alles an', () => {

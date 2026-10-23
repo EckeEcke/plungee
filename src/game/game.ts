@@ -1,4 +1,5 @@
 import {
+  BLINK_HALF,
   DT,
   MAX_REPLAY_TICKS,
   PLAYER_H,
@@ -9,6 +10,7 @@ import {
   K_ICE,
   World,
   encodeInputs,
+  isBlinkKind,
   laserPhase,
   type CompiledLevel,
   type InputDir,
@@ -67,6 +69,8 @@ export class Game {
   private bestTimer = 0
   private lastCountdown = 0
   private laserPrev: LaserPhase[] = []
+  /** Letzte Halbperiode des Blinktakts (wechselt alle BLINK_HALF Ticks) */
+  private blinkPrev = 0
   private disposed = false
 
   constructor(
@@ -107,6 +111,7 @@ export class Game {
     stopAllLoops()
     this.lastCountdown = 0
     this.laserPrev = this.level.lasers.map((l) => laserPhase(l, 0))
+    this.blinkPrev = 0
     this.world.onEvent = (e) => {
       this.renderer.handleEvent(e, this.world)
       if (e.type === 'spring') playSfx('spring')
@@ -223,10 +228,28 @@ export class Game {
       playSfx(ph === 'warn' ? 'laserWarn' : 'laserOn')
     }
 
+    // Blinkblöcke: ein Ton bei jedem Wechsel, aber nur wenn welche im Bild liegen
+    const half = Math.floor(w.tick / BLINK_HALF)
+    if (half !== this.blinkPrev) {
+      this.blinkPrev = half
+      if (this.blinkVisible()) playSfx('blink')
+    }
+
     const p = w.p
     const grounded = p.onGround && !p.dead
     setLoop('ice', grounded && w.surface === K_ICE && Math.abs(p.vx) > 12)
     setLoop('belt', grounded && (w.surface === K_BELT_L || w.surface === K_BELT_R))
+  }
+
+  /** Liegt mindestens ein Blinkblock im sichtbaren Bereich (mit einer Kachel Rand)? Wird nur beim Taktwechsel geprüft. */
+  private blinkVisible(): boolean {
+    const lv = this.level
+    const r0 = Math.max(0, Math.floor(this.renderer.camY / TILE) - 1)
+    const r1 = Math.min(lv.rows - 1, Math.ceil((this.renderer.camY + this.renderer.viewH) / TILE) + 1)
+    for (let i = r0 * lv.cols; i < (r1 + 1) * lv.cols; i++) {
+      if (isBlinkKind(lv.kind[i])) return true
+    }
+    return false
   }
 
   private emitHud(): void {
