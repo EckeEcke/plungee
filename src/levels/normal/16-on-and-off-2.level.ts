@@ -2,7 +2,7 @@ import { LevelBuilder } from '../../sim/builder'
 import type { LevelData } from '../../sim/types'
 
 export function createOnAnfOff2Level(): LevelData {
-  const b = new LevelBuilder('short', "On anf Off 2")
+  const b = new LevelBuilder('short', "On and Off 2")
 
   // Blöcke
   b.plat(0, 11, 15)
