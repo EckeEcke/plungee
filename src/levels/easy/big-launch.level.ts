@@ -1,0 +1,55 @@
+import { LevelBuilder } from '../../sim/builder'
+import type { LevelData } from '../../sim/types'
+
+export function createBigLaunchLevel(): LevelData {
+  const b = new LevelBuilder('short', "Big Launch")
+
+  // Blöcke
+  b.plat(5, 0, 3)
+  b.plat(5, 4, 4, '=')
+  b.plat(5, 5, 5)
+  b.plat(6, 0, 3)
+  b.plat(6, 5, 5)
+  b.plat(7, 0, 3)
+  b.plat(7, 5, 5)
+  b.plat(8, 0, 3)
+  b.plat(8, 5, 5)
+  b.plat(9, 0, 0)
+  b.plat(9, 5, 5)
+  b.plat(10, 0, 0)
+  b.plat(10, 5, 5)
+  b.plat(11, 0, 1)
+  b.plat(11, 2, 3, '=')
+  b.plat(11, 4, 5)
+  b.plat(24, 0, 15)
+  b.plat(25, 0, 15)
+  b.plat(26, 0, 15)
+  b.plat(27, 0, 15)
+  b.plat(28, 0, 15)
+  b.plat(29, 0, 15)
+  b.plat(30, 0, 15)
+  b.plat(31, 0, 15)
+  b.plat(32, 0, 15)
+  b.plat(33, 0, 15)
+  b.plat(34, 0, 15)
+  b.plat(35, 0, 15)
+  b.plat(36, 0, 15)
+  b.plat(37, 0, 15)
+  b.plat(38, 0, 15)
+  b.plat(39, 0, 15)
+
+  // Objekte
+  b.spawn(11, 23)
+  b.goal(10, 11)
+  b.spring(1, 9, 2, 'r')
+  b.spring(4, 9, 2)
+  b.spring(1, 10, 2, 'r')
+  b.spring(4, 10, 2, 'l')
+  b.spring(1, 23, 1)
+  b.spring(2, 23, 1)
+  b.spring(3, 23, 1)
+  b.spring(4, 23, 1)
+  b.mover(2, 11, 'v', 12, { w: 2, period: 180, phase: 0.5 })
+
+  return b.build()
+}

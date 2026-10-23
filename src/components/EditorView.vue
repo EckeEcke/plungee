@@ -348,24 +348,6 @@ function downloadTs(): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function downloadJson(): void {
-  const json = currentExport()
-  if (!json) return
-  const slug =
-    (doc.title || 'level')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'level'
-  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${slug}.plungee.json`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
 function doImport(): void {
   importError.value = ''
   try {
@@ -817,7 +799,6 @@ onBeforeUnmount(() => {
           </p>
           <div class="seg wide">
             <button type="button" :disabled="!verified" @click="copyJson">Copy code</button>
-            <button type="button" :disabled="!verified" @click="downloadJson">Save as file</button>
           </div>
           <template v-if="DEV">
             <p class="note">Local only: export the level as a <code>.level.ts</code> file for <code>src/levels/easy|normal|hard/</code> (the folder sets the difficulty). It is picked up by the game automatically (no test run needed).</p>

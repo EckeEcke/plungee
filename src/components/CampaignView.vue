@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Theme } from '../game/theme'
 import type { ProgressMap } from '../game/progress'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from '../levels'
@@ -36,6 +36,10 @@ const cssVars = computed(() => ({
   '--bg2': props.theme.bgBottom,
   '--outline': props.theme.outline,
   '--line': props.theme.ui.line,
+  '--c0': props.theme.decor[0],
+  '--c1': props.theme.decor[1],
+  '--c2': props.theme.decor[2],
+  '--c3': props.theme.decor[3],
 }))
 
 const done = computed(() => levels.value.filter((l) => props.progress[l.key]).length)
@@ -45,7 +49,20 @@ function resetScroll(): void {
   if (grid.value) grid.value.scrollTop = 0
 }
 
+/** Desktop: Pfeiltasten wechseln den Schwierigkeitsgrad, Esc geht zurück */
+function onKey(e: KeyboardEvent): void {
+  if (e.altKey || e.ctrlKey || e.metaKey) return
+  if (e.key === 'ArrowLeft') shift(-1)
+  else if (e.key === 'ArrowRight') shift(1)
+  else if (e.key === 'Escape') emit('exit')
+  else return
+  e.preventDefault()
+}
+
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
 onMounted(async () => {
+  window.addEventListener('keydown', onKey)
   await nextTick()
   const el = grid.value?.querySelector<HTMLElement>('[data-focus="true"]')
   el?.scrollIntoView({ block: 'center' })
@@ -54,20 +71,53 @@ onMounted(async () => {
 
 <template>
   <div class="camp" :style="cssVars">
-    <div class="column">
-      <header class="top">
+    <!-- Deko wie auf der Startseite, nur auf breiten Bildschirmen und nur an den Seiten sichtbar -->
+    <svg class="decor" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <polygon points="150,120 230,260 70,260" fill="var(--c0)" opacity="0.5" />
+      <circle cx="1440" cy="170" r="52" fill="none" stroke="var(--c2)" stroke-width="14" opacity="0.5" />
+      <path d="M1230 420 q20 -30 40 0 t40 0 t40 0 t40 0" fill="none" stroke="var(--c1)" stroke-width="14" stroke-linecap="round" opacity="0.6" />
+      <path d="M90 520 l28 -34 l28 34 l28 -34 l28 34 l28 -34" fill="none" stroke="var(--c3)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" opacity="0.55" />
+      <g fill="var(--c2)" opacity="0.55">
+        <circle cx="1380" cy="640" r="8" /><circle cx="1412" cy="640" r="8" /><circle cx="1444" cy="640" r="8" />
+        <circle cx="1380" cy="672" r="8" /><circle cx="1412" cy="672" r="8" /><circle cx="1444" cy="672" r="8" />
+      </g>
+      <polygon points="190,690 270,750 190,810" fill="var(--c1)" opacity="0.5" />
+      <rect x="1250" y="740" width="64" height="64" rx="14" fill="var(--c0)" opacity="0.45" transform="rotate(14 1282 772)" />
+      <path d="M110 80 v50 M85 105 h50" stroke="var(--c3)" stroke-width="14" stroke-linecap="round" opacity="0.5" />
+      <circle cx="120" cy="330" r="14" fill="var(--c1)" opacity="0.5" />
+    </svg>
+
+    <div class="shell">
+    <header class="top">
+      <div class="top-in">
         <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
         <div class="title">
           <b>Campaign</b>
           <small>{{ done }} / {{ levels.length }} completed</small>
+          <span class="bar" aria-hidden="true"><i :style="{ width: levels.length ? (done / levels.length) * 100 + '%' : '0%' }" /></span>
+        </div>
+        <div class="tabs" role="group" aria-label="Difficulty">
+          <button
+            v-for="d in DIFFICULTIES"
+            :key="d.id"
+            type="button"
+            class="dtab"
+            :class="{ on: d.id === difficulty }"
+            :aria-pressed="d.id === difficulty"
+            @click="emit('update:difficulty', d.id)"
+          >
+            {{ d.label }} <small>{{ doneIn(d.id) }}</small>
+          </button>
         </div>
         <div class="gold" :title="`${golds} gold medals`">
           <MedalIcon medal="gold" :size="20" />
           <b>{{ golds }}</b>
         </div>
-      </header>
+      </div>
+    </header>
 
-      <div class="diff" role="group" aria-label="Difficulty">
+    <div class="diff" role="group" aria-label="Difficulty">
+      <div class="diff-in">
         <button class="ib" type="button" aria-label="Previous difficulty" @click="shift(-1)">◀</button>
         <div class="diff-name" aria-live="polite">
           <b>{{ diffLabel }}</b>
@@ -77,33 +127,36 @@ onMounted(async () => {
         </div>
         <button class="ib" type="button" aria-label="Next difficulty" @click="shift(1)">▶</button>
       </div>
+    </div>
 
-      <div ref="grid" class="grid-wrap">
+    <div ref="grid" class="grid-wrap">
+      <div class="column">
         <Transition name="tab" mode="out-in" @after-leave="resetScroll">
-        <div :key="difficulty" class="pane">
-        <p v-if="levels.length === 0" class="empty">No levels here yet.</p>
-        <div class="grid">
-          <button
-            v-for="(l, i) in levels"
-            :key="l.key"
-            type="button"
-            class="tile"
-            :class="{ done: !!progress[l.key] }"
-            :data-focus="l.key === focusKey"
-            :aria-label="`Level ${i + 1}: ${l.title}${progress[l.key] ? ', completed' : ''}`"
-            @click="emit('play', i)"
-          >
-            <span class="num">{{ i + 1 }}</span>
-            <span v-if="progress[l.key]" class="meta">
-              <MedalIcon :medal="progress[l.key].medal" :size="18" />
-              <span class="time">{{ formatTicks(progress[l.key].bestTicks) }}</span>
-            </span>
-            <span v-else class="name">{{ l.title }}</span>
-          </button>
-        </div>
-        </div>
+          <div :key="difficulty" class="pane">
+            <p v-if="levels.length === 0" class="empty">No levels here yet.</p>
+            <div class="grid">
+              <button
+                v-for="(l, i) in levels"
+                :key="l.key"
+                type="button"
+                class="tile"
+                :class="{ done: !!progress[l.key] }"
+                :data-focus="l.key === focusKey"
+                :aria-label="`Level ${i + 1}: ${l.title}${progress[l.key] ? ', completed' : ''}`"
+                @click="emit('play', i)"
+              >
+                <span class="num">{{ i + 1 }}</span>
+                <span v-if="progress[l.key]" class="meta">
+                  <MedalIcon :medal="progress[l.key].medal" :size="18" />
+                  <span class="time">{{ formatTicks(progress[l.key].bestTicks) }}</span>
+                </span>
+                <span class="name" :class="{ 'on-done': !!progress[l.key] }">{{ l.title }}</span>
+              </button>
+            </div>
+          </div>
         </Transition>
       </div>
+    </div>
     </div>
   </div>
 </template>
@@ -113,26 +166,58 @@ onMounted(async () => {
   position: fixed;
   inset: 0;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   background: linear-gradient(180deg, var(--bg1), var(--bg2));
   color: var(--text);
 }
 
-.column {
-  width: min(100%, 520px);
-  height: 100%;
+.shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
-.top {
+.decor {
+  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Kopfzeilen laufen über die ganze Breite, der Inhalt darin ist begrenzt */
+.top,
+.diff {
+  position: relative;
+  background: var(--panel);
+  border-bottom: 3px solid var(--line);
+}
+
+.top-in,
+.diff-in {
+  width: min(100%, 520px);
+  margin: 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.top-in {
   padding: max(10px, env(safe-area-inset-top)) 12px 10px;
-  background: var(--panel);
-  border-bottom: 3px solid var(--line);
+}
+
+.diff-in {
+  padding: 10px 12px;
+}
+
+.tabs,
+.bar {
+  display: none;
 }
 
 .title {
@@ -175,15 +260,6 @@ onMounted(async () => {
   font-weight: 900;
 }
 
-.diff {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--panel);
-  border-bottom: 3px solid var(--line);
-}
-
 .diff-name {
   flex: 1;
   text-align: center;
@@ -222,11 +298,19 @@ onMounted(async () => {
   color: var(--muted);
 }
 
+/* Der Scrollbereich geht über die volle Breite, so sitzt die Scrollleiste am Fensterrand */
 .grid-wrap {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   touch-action: pan-y;
+}
+
+.column {
+  width: min(100%, 520px);
+  min-height: 100%;
+  margin: 0 auto;
   padding: 14px 12px max(18px, env(safe-area-inset-bottom));
 }
 
@@ -269,6 +353,11 @@ onMounted(async () => {
   line-height: 1;
 }
 
+/* Mobil: Name nur bei offenen Leveln, damit die Kachel ruhig bleibt */
+.name.on-done {
+  display: none;
+}
+
 .name {
   max-width: 100%;
   font-size: 10px;
@@ -309,6 +398,201 @@ onMounted(async () => {
 }
 .tab-leave-to {
   opacity: 0;
+}
+
+/* --- Tablet und Desktop (ab 600 px) -----------------------------------------------
+   Die Kopfleiste geht über die ganze Breite, darunter steht ein Streifen mit den Kacheln,
+   der seitlich nur durch Rahmenlinien begrenzt ist. Tabs ersetzen die Pfeile. */
+@media (min-width: 600px) {
+  /* Kopfzeile und Kacheln bilden einen Container, begrenzt nur durch seitliche Linien */
+  .shell {
+    width: min(100%, 1000px);
+    border-inline: 3px solid var(--line);
+    background: color-mix(in srgb, var(--bg1) 86%, transparent);
+  }
+
+  .top-in {
+    width: 100%;
+    gap: 18px;
+    padding: 16px 24px;
+  }
+
+  .top .ib {
+    width: 44px;
+    height: 44px;
+    transition: transform 0.12s ease, background 0.12s ease;
+  }
+
+  .top .ib:hover {
+    background: var(--accent);
+    color: var(--outline);
+    transform: translate(-1px, -1px);
+  }
+
+  .title {
+    flex: 0 0 auto;
+    min-width: 150px;
+  }
+
+  .title b {
+    font-size: 26px;
+    letter-spacing: 0.01em;
+  }
+
+  .title small {
+    font-size: 13px;
+  }
+
+  .bar {
+    display: block;
+    width: 100%;
+    height: 6px;
+    margin-top: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--line) 70%, transparent);
+    overflow: hidden;
+  }
+
+  .bar i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+    transition: width 0.3s ease;
+  }
+
+  .gold {
+    font-size: 20px;
+  }
+
+  .diff {
+    display: none;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    margin: 0 auto;
+    border: 3px solid var(--line);
+    border-radius: 999px;
+  }
+
+  .dtab {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 7px;
+    padding: 7px 18px;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--muted);
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .dtab small {
+    font-size: 12px;
+    font-weight: 800;
+    opacity: 0.8;
+  }
+
+  .dtab:hover:not(.on) {
+    color: var(--text);
+  }
+
+  .dtab.on {
+    color: var(--outline);
+    background: var(--accent);
+  }
+
+  .decor {
+    display: block;
+  }
+
+  .column {
+    width: 100%;
+    padding: 28px 28px 36px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 18px;
+  }
+
+  .tile {
+    aspect-ratio: 1 / 0.95;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 20px;
+    box-shadow: 4px 4px 0 var(--outline);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .tile:hover {
+    transform: translate(-2px, -3px);
+    box-shadow: 7px 8px 0 var(--outline);
+  }
+
+  .tile:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--outline);
+  }
+
+  .tile:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .num {
+    font-size: 36px;
+  }
+
+  .name,
+  .name.on-done {
+    display: -webkit-box;
+    font-size: 13px;
+    -webkit-line-clamp: 2;
+  }
+
+  .tile.done .name {
+    color: inherit;
+    opacity: 0.75;
+  }
+
+  .time {
+    font-size: 14px;
+  }
+}
+
+/* Schmale Tablets: Titel und Tabs würden sich drängen, die Tabs bekommen eine eigene Zeile */
+@media (min-width: 600px) and (max-width: 819px) {
+  .top-in {
+    flex-wrap: wrap;
+    row-gap: 14px;
+  }
+
+  .title {
+    flex: 1;
+  }
+
+  .tabs {
+    order: 3;
+    flex: 1 0 100%;
+    margin: 0;
+  }
+
+  .dtab {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .column {
+    padding: 22px 20px 28px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
