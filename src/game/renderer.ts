@@ -107,6 +107,8 @@ export class Renderer {
   camY = 0
   /** true = Kamera folgt nicht dem Spieler (Editor), camY wird von außen gesetzt */
   freeCamera = false
+  /** Platz (CSS-Pixel) für die Bedienleiste oben: die Kamera darf so weit über das Levelende hinaus nach oben, damit die obersten Reihen nicht unter ihr liegen */
+  private topInsetPx = 0
   private snap = true
   private squash = 0
   private shake = 0
@@ -155,6 +157,15 @@ export class Renderer {
     this.canvas.style.width = `${cssW}px`
     this.canvas.style.height = `${cssH}px`
     this.snap = true
+  }
+
+  setTopInset(px: number): void {
+    this.topInsetPx = Math.max(0, px)
+  }
+
+  /** Kleinste erlaubte Kameraposition: 0 bzw. so weit darüber, dass die Leiste über dem Level liegt */
+  private minCamY(): number {
+    return this.freeCamera ? 0 : -this.topInsetPx / this.scale
   }
 
   /** Größte erlaubte Kameraposition (oberer Rand der Ansicht) */
@@ -310,7 +321,7 @@ export class Renderer {
     const p = world.p
     const fall = clamp(p.vy / TERMINAL_VY, 0, 1)
     const target = p.y - this.viewH * (0.42 - 0.14 * fall)
-    const t = clamp(target, 0, maxCam)
+    const t = clamp(target, this.minCamY(), maxCam)
     if (this.snap) {
       this.camY = t
       this.snap = false
@@ -345,6 +356,7 @@ export class Renderer {
     const lv = this.level
     const t = world.tick + (running ? alpha : 0)
 
+    this.drawCeiling(ctx)
     this.drawTiles(ctx, world, t)
     for (const l of lv.lasers) this.drawLaser(ctx, l, world.tick)
     for (let i = 0; i < lv.checkpoints.length; i++) {
@@ -604,6 +616,19 @@ export class Renderer {
     }
     ctx.fill()
     ctx.restore()
+  }
+
+  /** Decke über dem Level (oberste Zeile ist fest): füllt den Platz, den die Kamera für die Bedienleiste freigibt */
+  private drawCeiling(ctx: CanvasRenderingContext2D): void {
+    if (this.camY >= 0) return
+    const th = this.theme
+    const top = this.camY - 12 // Puffer für das Wackeln
+    ctx.fillStyle = th.solid
+    ctx.fillRect(0, top, LEVEL_WIDTH, -top)
+    ctx.fillStyle = th.solidShade
+    ctx.fillRect(0, -4, LEVEL_WIDTH, 4)
+    ctx.fillStyle = th.outline
+    ctx.fillRect(0, -1.4, LEVEL_WIDTH, 1.4)
   }
 
   /** Bewegliche Plattform: Schiene, Platte mit Pfeil-Nieten */

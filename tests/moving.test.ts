@@ -139,6 +139,42 @@ describe('Bewegliche Plattform', () => {
     expect(minY).toBeLessThan(y0 - 8)
   })
 
+  it('Aufzug in einen Schacht: Überstand am Plattenrand schiebt die Kante auf die Platte, kein Durchfallen', () => {
+    // Schacht (Spalten 11-12) mit Wänden in Zeile 4..13; darunter offener Gang. Die Platte ist so breit wie der Schacht.
+    const b = new LevelBuilder('short').plat(16, 0, 15)
+    for (let r = 4; r <= 13; r++) b.plat(r, 9, 10).plat(r, 13, 14)
+    b.mover(11, 4, 'v', 12, { w: 2, period: 120 }).spawn(1, 14).goal(0, 0)
+    const lv = compileLevel(b.build())
+    for (const overhang of [1, 3, 6, 9]) {
+      const w = new World(lv)
+      w.tick = 60 // Platte steht unten (Zeile 16) und fährt gleich hoch
+      const a = w.moverPos(0, w.tick)
+      w.p.x = a.x - overhang // ragt links in den offenen Gang, unter der Schachtwand
+      w.p.y = a.y - PLAYER_H
+      for (let i = 0; i < 59; i++) {
+        w.step(0)
+        expect(w.p.dead).toBe(false)
+        expect(w.riding, `Überstand ${overhang}px, Tick ${w.tick}`).toBe(0)
+      }
+      const top = w.moverPos(0, w.tick)
+      expect(w.p.y + PLAYER_H).toBeCloseTo(top.y, 0)
+      expect(w.p.x).toBeGreaterThanOrEqual(11 * TILE) // in den Schacht geschoben
+    }
+  })
+
+  it('echtes Einquetschen (ganze Figur unter Fels) bleibt unverändert: keine Verschiebung', () => {
+    const b = new LevelBuilder('short').plat(16, 0, 15).plat(8, 0, 15)
+    b.mover(5, 8, 'v', 8, { w: 4, period: 120 }).spawn(1, 14).goal(0, 0)
+    const w = new World(compileLevel(b.build()))
+    w.tick = 60
+    const a = w.moverPos(0, w.tick)
+    w.p.x = a.x + 20
+    w.p.y = a.y - PLAYER_H
+    const x0 = w.p.x
+    run(w, 0, 59)
+    expect(w.p.x).toBe(x0)
+  })
+
   it('wirkt nicht als Boden unter Eis-/Bandfläche', () => {
     const w = new World(compileLevel(base('h')))
     run(w, 0, 20)

@@ -21,6 +21,7 @@ import {
   ACCEL_GROUND,
   LAND_EVENT_VY,
   MAX_STEP,
+  SHOVE_MIN_OVERLAP,
   MOVE_SPEED,
   PLAYER_H,
   PLAYER_W,
@@ -369,8 +370,43 @@ export class World {
     const vx = p.vx
     if (b.x !== a.x) this.moveX(b.x - a.x)
     p.vx = vx
-    if (b.y !== a.y) this.moveY(b.y - a.y)
+    if (b.y !== a.y) {
+      const wantY = p.y + (b.y - a.y)
+      this.moveY(b.y - a.y)
+      // Nach oben an einer Tile-Kante hängen geblieben: nicht durch die weiterfahrende Platte fallen
+      if (b.y < a.y && p.y > wantY + EPS) this.shoveOffCorner(wantY, b.x, this.level.movers[this.riding].w * TILE)
+    }
     p.vy = vy
+  }
+
+  /** Passt die Figur an dieser Pose in keine feste Zelle? */
+  private fitsAt(x: number, y: number): boolean {
+    const c0 = Math.floor(x / TILE)
+    const c1 = Math.floor((x + PLAYER_W - EPS) / TILE)
+    const r0 = Math.floor(y / TILE)
+    const r1 = Math.floor((y + PLAYER_H - EPS) / TILE)
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.isSolid(c, r)) return false
+    return true
+  }
+
+  /**
+   * Fährt eine Platte nach oben (z. B. in einen Schacht) und die Figur steht am Plattenrand, stößt ihr
+   * überstehendes Stück an die Unterkante eines Tiles. Dann schiebt die Kante sie seitlich auf die Platte
+   * (bis zur nächsten Tile-Grenze), statt sie durch die Platte fallen zu lassen. Steckt der ganze Körper
+   * unter Fels (echtes Einquetschen) oder ginge es nur von der Platte weg, bleibt alles wie es war.
+   */
+  private shoveOffCorner(wantY: number, plateX: number, plateW: number): void {
+    const p = this.p
+    const right = (Math.floor(p.x / TILE) + 1) * TILE
+    const left = Math.floor((p.x + PLAYER_W - EPS) / TILE) * TILE - PLAYER_W
+    const cands = [right, left].sort((u, v) => Math.abs(u - p.x) - Math.abs(v - p.x))
+    for (const x of cands) {
+      const overlap = Math.min(x + PLAYER_W, plateX + plateW) - Math.max(x, plateX)
+      if (overlap < SHOVE_MIN_OVERLAP || !this.fitsAt(x, wantY)) continue
+      p.x = x
+      p.y = wantY
+      return
+    }
   }
 
   /** Einweg-Landung auf beweglichen Plattformen (Pose zum Ende dieses Ticks) */
@@ -512,7 +548,6 @@ export class World {
     return false
   }
 
-  /** Einwegplattform: trägt nur von oben, wenn der Spieler vorher über ihrer Oberkante war */
   private oneWayInCols(row: number, left: number, right: number, prevBottom: number): boolean {
     const lv = this.level
     if (row < 0 || row >= lv.rows || prevBottom > row * TILE + EPS) return false

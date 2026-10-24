@@ -105,6 +105,11 @@ export class Game {
     this.renderer.setTheme(theme)
   }
 
+  /** Höhe der Bedienleiste in CSS-Pixeln: darunter beginnt das Level, damit die Figur oben nicht verdeckt wird */
+  setTopInset(px: number): void {
+    this.renderer.setTopInset(px)
+  }
+
   restart(): void {
     this.world = new World(this.level)
     window.clearTimeout(this.bestTimer)

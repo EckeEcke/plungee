@@ -30,6 +30,7 @@ const emit = defineEmits<{
 
 const column = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
+const hudBar = ref<HTMLElement | null>(null)
 const hud = shallowRef<HudState>({
   status: 'ready',
   ticks: 0,
@@ -67,16 +68,30 @@ const MEDAL_TEXT = { gold: 'Gold', silver: 'Silver', bronze: 'Bronze' } as const
 const hintAllowed = consumeControlsHint()
 const showHint = computed(() => hintAllowed && hud.value.status !== 'finished' && hud.value.ticks < 360)
 
+/** Unterkante der Bedienleiste (plus etwas Luft) gemessen, damit das Level darunter beginnt und die Figur oben nie verdeckt wird */
+const HUD_GAP_PX = 8
+let insetObs: ResizeObserver | null = null
+function measureInset(): void {
+  if (!game || !column.value || !hudBar.value) return
+  const bottom = hudBar.value.getBoundingClientRect().bottom - column.value.getBoundingClientRect().top
+  game.setTopInset(Math.max(0, bottom) + HUD_GAP_PX)
+}
+
 onMounted(() => {
   startMusic()
   if (!column.value || !canvas.value) return
   game = new Game(canvas.value, column.value, props.theme, (h) => {
     hud.value = h
   })
+  measureInset()
   game.load(compileLevel(props.levelData), props.levelKey)
+  insetObs = new ResizeObserver(measureInset)
+  insetObs.observe(column.value)
 })
 
 onBeforeUnmount(() => {
+  insetObs?.disconnect()
+  insetObs = null
   stopMusic()
   game?.dispose()
   game = null
@@ -107,7 +122,7 @@ function restart(): void {
     <div ref="column" class="column">
       <canvas ref="canvas" class="canvas" />
 
-      <div class="hud" data-noinput>
+      <div ref="hudBar" class="hud" data-noinput>
         <div class="pill time">{{ timeText }}</div>
         <div class="pill deaths" title="Deaths">✕ {{ hud.deaths }}</div>
         <div class="spacer" />
@@ -293,7 +308,8 @@ function restart(): void {
 .intro {
   position: absolute;
   left: 50%;
-  top: 22%;
+  /* unten statt oben: die Figur startet in den obersten Reihen und darf nicht von der Karte verdeckt werden */
+  bottom: 24%;
   transform: translateX(-50%);
   width: max-content;
   max-width: calc(100% - 40px);
@@ -326,7 +342,7 @@ function restart(): void {
 @keyframes intro-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-12px);
+    transform: translateX(-50%) translateY(12px);
   }
   to {
     opacity: 1;

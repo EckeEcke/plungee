@@ -75,6 +75,8 @@ export const STUN_DAMP = 0.97
 // Kollisions-Details
 export const MAX_STEP = 6
 export const EPS = 1e-4
+/** Mindestüberdeckung mit der Platte (px), damit die Kante die Figur auf sie schieben darf */
+export const SHOVE_MIN_OVERLAP = 2
 export const LAND_EVENT_VY = 120
 
 // Replays
