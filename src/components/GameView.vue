@@ -249,7 +249,10 @@ function restart(): void {
 
 .time {
   font-size: 20px;
-  min-width: 84px;
+  /* feste Breite: sonst ändert sich das Pill mit jeder Stelle der Zeit (0.00 → 10.00 → 1:05.00) und flackert.
+     7ch reicht für alle Formate bis 10:00.00, weil ':' und '.' schmaler sind als eine Ziffer (tabular-nums) */
+  box-sizing: content-box;
+  width: 7ch;
   text-align: center;
 }
 
