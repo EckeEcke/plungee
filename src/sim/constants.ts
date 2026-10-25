@@ -80,4 +80,6 @@ export const SHOVE_MIN_OVERLAP = 2
 export const LAND_EVENT_VY = 120
 
 // Replays
+/** Bei jeder Änderung an der Physik/Sim-Logik erhöhen: gespeicherte Replays und Bestzeiten gehören zu einer Version (Server speichert sie je Level) */
+export const SIM_VERSION = 1
 export const MAX_REPLAY_TICKS = TICK_RATE * 60 * 10

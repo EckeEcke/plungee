@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import EditorView from './components/EditorView.vue'
 import CampaignView from './components/CampaignView.vue'
 import GameView from './components/GameView.vue'
+import OnlineView from './components/OnlineView.vue'
+import AdminView from './components/AdminView.vue'
+import WeeklyView from './components/WeeklyView.vue'
 import SoundIcon from './components/SoundIcon.vue'
 import { audioSettings } from './audio/audio'
+import { startOnlineLevel, submitTime, submitWeeklyTime, type BoardState, type OnlineMeta, type WeeklyInfo } from './online/api'
+import type { LevelData } from './sim'
 import { loadProgress, recordResult } from './game/progress'
 import { themeById } from './game/theme'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from './levels'
 
-const screen = ref<'menu' | 'campaign' | 'play' | 'edit'>('menu')
+const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'admin'>('menu')
 
 /** Gespeicherte Wahl zuerst, sonst die Systemeinstellung (im Webview der Reddit-App erbt sie das Gerät) */
 function initialDark(): boolean {
@@ -68,6 +73,88 @@ function onFinished(res: { ticks: number; deaths: number }): void {
   progress.value = recordResult(progress.value, current.value.key, res.ticks, res.deaths, current.value.par)
 }
 
+// --- Community-Level ---------------------------------------------------------------
+
+const onlineLevel = ref<{ meta: OnlineMeta; data: LevelData } | null>(null)
+const board = ref<BoardState | null>(null)
+const notice = ref('')
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+let loadingOnline = false
+
+function showNotice(text: string): void {
+  notice.value = text
+  clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => (notice.value = ''), 4500)
+}
+
+/** Lädt ein Community-Level und startet es; `back` ist die Seite, auf die Fehler und „Zurück“ führen */
+async function playOnline(id: string, back: 'online' | 'menu' = 'online'): Promise<void> {
+  if (loadingOnline) return
+  loadingOnline = true
+  try {
+    const res = await startOnlineLevel(id)
+    onlineLevel.value = res
+    board.value = null
+    screen.value = 'onlinePlay'
+  } catch (e) {
+    screen.value = back
+    showNotice(e instanceof Error ? e.message : 'Could not load the level')
+  } finally {
+    loadingOnline = false
+  }
+}
+
+async function onOnlineFinished(res: { ticks: number; deaths: number; replay: string }): Promise<void> {
+  const lv = onlineLevel.value
+  if (!lv) return
+  board.value = { status: 'loading' }
+  try {
+    const r = await submitTime(lv.meta.id, res.replay)
+    if (onlineLevel.value === lv) board.value = { status: 'ok', improved: r.improved, board: r }
+  } catch (e) {
+    if (onlineLevel.value === lv) {
+      board.value = { status: 'error', error: e instanceof Error ? e.message : 'Could not send your time' }
+    }
+  }
+}
+
+// --- Weekly Challenge ---------------------------------------------------------------
+
+const weeklyLevel = ref<WeeklyInfo | null>(null)
+
+function playWeekly(info: WeeklyInfo): void {
+  weeklyLevel.value = info
+  board.value = null
+  screen.value = 'weeklyPlay'
+}
+
+async function onWeeklyFinished(res: { ticks: number; deaths: number; replay: string }): Promise<void> {
+  const lv = weeklyLevel.value
+  if (!lv) return
+  board.value = { status: 'loading' }
+  try {
+    const r = await submitWeeklyTime(res.replay)
+    if (weeklyLevel.value === lv) board.value = { status: 'ok', improved: r.improved, board: r }
+  } catch (e) {
+    if (weeklyLevel.value === lv) {
+      board.value = { status: 'error', error: e instanceof Error ? e.message : 'Could not send your time' }
+    }
+  }
+}
+
+onMounted(() => {
+  let params: URLSearchParams
+  try {
+    params = new URLSearchParams(location.search)
+  } catch {
+    return
+  }
+  const id = params.get('level')
+  if (params.has('admin')) screen.value = 'admin'
+  else if (id) void playOnline(id, 'menu')
+  if (id || params.has('admin')) history.replaceState(null, '', location.pathname)
+})
+
 watch(themeId, (id) => {
   try {
     localStorage.setItem('plunge:theme', id)
@@ -116,6 +203,40 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     @next="startLevel(levelIdx + 1, playDifficulty)"
     @finished="onFinished"
   />
+
+  <GameView
+    v-else-if="screen === 'onlinePlay' && onlineLevel"
+    :key="onlineLevel.meta.id"
+    :level-data="onlineLevel.data"
+    :level-key="'online:' + onlineLevel.meta.id"
+    :theme="theme"
+    :board="board"
+    :intro="{ number: 0, title: onlineLevel.meta.title }"
+    exit-icon="▦"
+    exit-text="Community levels"
+    @exit="screen = 'online'"
+    @finished="onOnlineFinished"
+  />
+
+  <GameView
+    v-else-if="screen === 'weeklyPlay' && weeklyLevel"
+    :key="weeklyLevel.week"
+    :level-data="weeklyLevel.data"
+    :level-key="'weekly:' + weeklyLevel.week"
+    :theme="theme"
+    :board="board"
+    :intro="{ number: 0, title: weeklyLevel.title, label: 'Weekly challenge' }"
+    exit-icon="▦"
+    exit-text="Weekly challenge"
+    @exit="screen = 'weekly'"
+    @finished="onWeeklyFinished"
+  />
+
+  <WeeklyView v-else-if="screen === 'weekly'" :theme="theme" @exit="screen = 'menu'" @play="playWeekly" />
+
+  <OnlineView v-else-if="screen === 'online'" :theme="theme" @exit="screen = 'menu'" @play="playOnline($event)" />
+
+  <AdminView v-else-if="screen === 'admin'" :theme="theme" @exit="screen = 'menu'" />
 
   <CampaignView
     v-else-if="screen === 'campaign'"
@@ -166,6 +287,8 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
       <div class="buttons">
         <button class="play" type="button" @click="screen = 'campaign'">Campaign</button>
+        <button class="build" type="button" @click="screen = 'weekly'">Weekly challenge</button>
+        <button class="build" type="button" @click="screen = 'online'">Community levels</button>
         <button class="build" type="button" @click="screen = 'edit'">Build a level</button>
       </div>
 
@@ -212,9 +335,38 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     </div>
   </main>
   </Transition>
+  <Transition name="notice">
+    <div v-if="notice" class="notice" role="alert">{{ notice }}</div>
+  </Transition>
 </template>
 
 <style scoped>
+.notice {
+  position: fixed;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: min(90vw, 420px);
+  padding: 10px 18px;
+  font-weight: 800;
+  text-align: center;
+  color: #fff;
+  background: #2b2350;
+  border: 3px solid #fff;
+  border-radius: 14px;
+}
+
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.25s;
+}
+
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+}
+
 .menu {
   position: fixed;
   inset: 0;
@@ -336,6 +488,7 @@ h1 {
 }
 
 .build {
+  min-width: 240px;
   cursor: pointer;
   font-size: 18px;
   font-weight: 900;

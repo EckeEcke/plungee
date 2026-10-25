@@ -32,6 +32,7 @@ import { EditorController } from '../editor/controller'
 import { EditorDoc } from '../editor/doc'
 import { levelHash } from '../editor/hash'
 import { exportLevel, importLevel, verifyRun, type RunProof } from '../editor/share'
+import { loadName, saveName, uploadLevel } from '../online/api'
 import { loadDraft, saveDraft } from '../editor/storage'
 import { levelFnName, levelToTs } from '../editor/tscode'
 import type { Theme } from '../game/theme'
@@ -319,6 +320,42 @@ async function copyJson(): Promise<void> {
     showToast('Level code copied')
   } catch {
     showToast('Copy not possible, please save the file')
+  }
+}
+
+// --- Hochladen zur Freigabe ---------------------------------------------------------
+
+const uploading = ref(false)
+const authorName = ref(loadName())
+/** Hashes, die in dieser Sitzung schon hochgeladen wurden (der Server lehnt Doppelte ohnehin ab) */
+const uploadedHashes = new Set<string>()
+const titleOk = computed(() => {
+  void uiVersion.value
+  const n = doc.title.trim().length
+  return n >= 3 && n <= 32
+})
+const alreadyUploaded = computed(() => uploadedHashes.has(hash.value))
+const canUpload = computed(() => verified.value && titleOk.value && !uploading.value && !alreadyUploaded.value)
+
+function onAuthor(e: Event): void {
+  authorName.value = (e.target as HTMLInputElement).value.slice(0, 16)
+  saveName(authorName.value)
+}
+
+async function upload(): Promise<void> {
+  if (!canUpload.value || !proof.value) return
+  const data = doc.toLevelData()
+  const h = levelHash(data)
+  uploading.value = true
+  try {
+    await uploadLevel(doc.title.trim(), data, proof.value.run.replay)
+    uploadedHashes.add(h)
+    showToast('Uploaded! It shows up in Community levels once it has been approved.')
+  } catch (e) {
+    if (e instanceof Error && /already uploaded/i.test(e.message)) uploadedHashes.add(h)
+    showToast(e instanceof Error ? e.message : 'Upload failed')
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -800,6 +837,19 @@ onBeforeUnmount(() => {
           <div class="seg wide">
             <button type="button" :disabled="!verified" @click="copyJson">Copy code</button>
           </div>
+          <p class="note">
+            Upload it to <b>Community levels</b>: after a quick review by me, everyone can play it and compete for the best time.
+          </p>
+          <label class="note author">
+            Your name (shown as author)
+            <input type="text" maxlength="16" placeholder="Anonymous" :value="authorName" @input="onAuthor" />
+          </label>
+          <p v-if="verified && !titleOk" class="note">Give your level a name of 3–32 characters first (field at the top of this menu).</p>
+          <div class="seg wide">
+            <button type="button" :disabled="!canUpload" @click="upload">
+              {{ uploading ? 'Uploading …' : alreadyUploaded ? '✓ Uploaded' : 'Upload for review' }}
+            </button>
+          </div>
           <template v-if="DEV">
             <p class="note">Local only: export the level as a <code>.level.ts</code> file for <code>src/levels/easy|normal|hard/</code> (the folder sets the difficulty). It is picked up by the game automatically (no test run needed).</p>
             <div class="seg wide">
@@ -864,6 +914,20 @@ onBeforeUnmount(() => {
   padding: max(8px, env(safe-area-inset-top)) 8px 8px;
   background: var(--panel);
   border-bottom: 3px solid var(--line);
+}
+
+.author {
+  display: grid;
+  gap: 4px;
+}
+
+.author input {
+  font: inherit;
+  padding: 7px 9px;
+  color: var(--text);
+  background: transparent;
+  border: 2px solid var(--line);
+  border-radius: 10px;
 }
 
 .title {

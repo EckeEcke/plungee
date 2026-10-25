@@ -8,6 +8,7 @@ import type { Theme } from '../game/theme'
 import { medalFor, medalTargets } from '../game/medals'
 import { compileLevel, formatTicks, type LevelData } from '../sim'
 import MedalIcon from './MedalIcon.vue'
+import type { BoardState } from '../online/api'
 
 const props = withDefaults(
   defineProps<{
@@ -18,9 +19,10 @@ const props = withDefaults(
     exitText?: string
     par?: number | null
     hasNext?: boolean
-    intro?: { number: number; title: string } | null
+    intro?: { number: number; title: string; label?: string } | null
+    board?: BoardState | null
   }>(),
-  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null },
+  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null },
 )
 const emit = defineEmits<{
   exit: []
@@ -145,7 +147,7 @@ function restart(): void {
 
       <Transition name="fadeout">
         <div v-if="intro && hud.status === 'ready'" class="intro" aria-hidden="true">
-          <small>Level {{ intro.number }}</small>
+          <small>{{ intro.label ?? (intro.number > 0 ? 'Level ' + intro.number : 'Community level') }}</small>
           <b>{{ intro.title }}</b>
         </div>
       </Transition>
@@ -180,6 +182,24 @@ function restart(): void {
           <div v-if="hud.newBest" class="badge">
             <i v-for="n in 8" :key="n" class="spark" :style="{ '--a': n * 45 + 'deg' }" aria-hidden="true" />
             <span class="badge-text">★ New best!</span>
+          </div>
+          <div v-if="board" class="board" aria-live="polite">
+            <div class="board-head">
+              <b>Best times</b>
+              <span v-if="board.board && board.board.rank">Your rank {{ board.board.rank }} / {{ board.board.total }}</span>
+            </div>
+            <p v-if="board.status === 'loading'" class="board-note">Sending your time …</p>
+            <p v-else-if="board.status === 'error'" class="board-note err">{{ board.error }}</p>
+            <template v-else-if="board.board">
+              <p v-if="board.improved === false" class="board-note">Your best time on this level is faster.</p>
+              <ol class="board-list">
+                <li v-for="r in board.board.top" :key="r.rank" :class="{ you: r.you }">
+                  <span class="n">{{ r.rank }}</span>
+                  <span class="who">{{ r.name }}</span>
+                  <span class="t">{{ formatTicks(r.ticks) }}</span>
+                </li>
+              </ol>
+            </template>
           </div>
           <div class="actions">
             <button class="cta" type="button" @click="restart">Retry</button>
@@ -565,6 +585,73 @@ function restart(): void {
   100% {
     transform: scale(1);
   }
+}
+
+.board {
+  margin-top: 10px;
+  border-top: 1.5px dashed rgba(255, 255, 255, 0.18);
+  padding-top: 8px;
+  text-align: left;
+}
+
+.board-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 14px;
+}
+
+.board-head span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.board-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.board-note.err {
+  color: var(--accent);
+}
+
+.board-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 132px;
+  overflow-y: auto;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.board-list li {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 8px;
+}
+
+.board-list li.you {
+  background: var(--accent);
+  color: var(--outline);
+}
+
+.board-list .n {
+  opacity: 0.7;
+}
+
+.board-list .who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-list .t {
+  font-variant-numeric: tabular-nums;
 }
 
 .actions {
