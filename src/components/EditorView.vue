@@ -31,7 +31,7 @@ import type { TileChar } from '../sim'
 import { EditorController } from '../editor/controller'
 import { EditorDoc } from '../editor/doc'
 import { levelHash } from '../editor/hash'
-import { exportLevel, importLevel, verifyRun, type RunProof } from '../editor/share'
+import { verifyRun, type RunProof } from '../editor/share'
 import { loadName, saveName, uploadLevel } from '../online/api'
 import { loadDraft, saveDraft } from '../editor/storage'
 import { levelFnName, levelToTs } from '../editor/tscode'
@@ -90,8 +90,6 @@ const tool = ref<ToolId>('tile')
 const mode = ref<'edit' | 'test'>('edit')
 const menuOpen = ref(false)
 const errorsOpen = ref(false)
-const importText = ref('')
-const importError = ref('')
 const toast = ref('')
 const testData = shallowRef<LevelData | null>(null)
 const testKey = ref('')
@@ -307,22 +305,6 @@ function loadTemplate(data: LevelData): void {
   loadFresh(structuredClone(data))
 }
 
-function currentExport(): string | null {
-  if (!verified.value || !proof.value) return null
-  return exportLevel(doc.toLevelData(), proof.value.run)
-}
-
-async function copyJson(): Promise<void> {
-  const json = currentExport()
-  if (!json) return
-  try {
-    await navigator.clipboard.writeText(json)
-    showToast('Level code copied')
-  } catch {
-    showToast('Copy not possible, please save the file')
-  }
-}
-
 // --- Hochladen zur Freigabe ---------------------------------------------------------
 
 const uploading = ref(false)
@@ -383,23 +365,6 @@ function downloadTs(): void {
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-function doImport(): void {
-  importError.value = ''
-  try {
-    const shared = importLevel(importText.value.trim())
-    doc.replaceWith(shared.level)
-    proof.value = { hash: levelHash(shared.level), run: shared.run }
-    ctrl.value?.select(null)
-    const spawn = doc.entityList.find((e) => e.t === 'spawn')
-    ctrl.value?.scrollToRow(spawn ? spawn.y : 0)
-    importText.value = ''
-    menuOpen.value = false
-    showToast('Level imported')
-  } catch (e) {
-    importError.value = e instanceof Error ? e.message : 'Import failed'
-  }
 }
 
 function onKey(e: KeyboardEvent): void {
@@ -830,13 +795,10 @@ onBeforeUnmount(() => {
         </section>
 
         <section>
-          <h3>Share</h3>
+          <h3>Upload</h3>
           <p v-if="!verified" class="note">
-            To share a level, play it to the goal once yourself (▶ Test). Any change invalidates the test.
+            To upload a level, play it to the goal once yourself (▶ Test). Any change invalidates the test.
           </p>
-          <div class="seg wide">
-            <button type="button" :disabled="!verified" @click="copyJson">Copy code</button>
-          </div>
           <p class="note">
             Upload it to <b>Community levels</b>: after a quick review by me, everyone can play it and compete for the best time.
           </p>
@@ -857,13 +819,6 @@ onBeforeUnmount(() => {
               <button type="button" :disabled="errors.length > 0" @click="downloadTs">Save as .level.ts</button>
             </div>
           </template>
-        </section>
-
-        <section>
-          <h3>Import</h3>
-          <textarea v-model="importText" rows="3" placeholder="Paste level code here" />
-          <p v-if="importError" class="error">{{ importError }}</p>
-          <button class="cta" type="button" :disabled="!importText.trim()" @click="doImport">Import</button>
         </section>
 
         <button class="ghost" type="button" @click="emit('exit')">Back to main menu</button>
@@ -1329,8 +1284,7 @@ section {
   color: var(--muted);
 }
 
-input,
-textarea {
+input {
   width: 100%;
   padding: 10px 12px;
   font: inherit;
@@ -1353,14 +1307,6 @@ textarea {
   color: var(--muted);
 }
 
-.error {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 800;
-  color: #ffb3a9;
-}
-
-.cta,
 .ghost {
   padding: 11px 14px;
   font-size: 15px;
@@ -1368,17 +1314,6 @@ textarea {
   border: 3px solid var(--line);
   border-radius: 14px;
   cursor: pointer;
-}
-
-.cta {
-  color: var(--outline);
-  background: var(--accent);
-  box-shadow: 3px 3px 0 var(--outline);
-}
-
-.cta:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .ghost {

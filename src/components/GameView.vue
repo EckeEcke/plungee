@@ -265,6 +265,9 @@ function restart(): void {
   font-size: 16px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  /* nie umbrechen oder schrumpfen: sonst rutscht die Zahl hinter dem ✕ in eine zweite Zeile */
+  white-space: nowrap;
+  flex: none;
 }
 
 .time {
@@ -695,6 +698,45 @@ function restart(): void {
 .fadeout-leave-to,
 .result-leave-to {
   opacity: 0;
+}
+
+/* Schmale Bildschirme: Leiste enger, damit Zeit, Tode (auch dreistellig) und drei Knöpfe in eine Zeile passen */
+@media (max-width: 380px) {
+  .hud {
+    gap: 5px;
+    left: 8px;
+    right: 14px;
+  }
+  .pill {
+    padding: 6px 9px;
+    font-size: 15px;
+  }
+  .time {
+    font-size: 16px;
+  }
+  .btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 300px) {
+  .hud {
+    gap: 4px;
+  }
+  .pill {
+    padding: 5px 7px;
+    font-size: 14px;
+  }
+  .time {
+    font-size: 15px;
+  }
+  .btn {
+    width: 28px;
+    height: 28px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
