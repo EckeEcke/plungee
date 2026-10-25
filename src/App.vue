@@ -104,6 +104,11 @@ async function playOnline(id: string, back: 'online' | 'menu' = 'online'): Promi
   }
 }
 
+/** Link, der das Level direkt startet (siehe onMounted) */
+function levelLink(id: string): string {
+  return `${location.origin}${location.pathname}?level=${id}`
+}
+
 async function onOnlineFinished(res: { ticks: number; deaths: number; replay: string }): Promise<void> {
   const lv = onlineLevel.value
   if (!lv) return
@@ -211,6 +216,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     :level-key="'online:' + onlineLevel.meta.id"
     :theme="theme"
     :board="board"
+    :share-url="levelLink(onlineLevel.meta.id)"
     :intro="{ number: 0, title: onlineLevel.meta.title }"
     exit-icon="▦"
     exit-text="Community levels"

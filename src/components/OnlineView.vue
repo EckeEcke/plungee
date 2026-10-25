@@ -13,7 +13,6 @@ const total = ref(0)
 const loading = ref(false)
 const error = ref('')
 const name = ref(loadName())
-const copied = ref('')
 /** Verwirft Antworten veralteter Anfragen (schnelles Umschalten der Reiter) */
 let ticket = 0
 
@@ -73,19 +72,6 @@ function ago(ts: number): string {
   return d < 30 ? `${d} d ago` : new Date(ts).toLocaleDateString()
 }
 
-async function copyLink(id: string): Promise<void> {
-  const url = `${location.origin}${location.pathname}?level=${id}`
-  try {
-    await navigator.clipboard.writeText(url)
-    copied.value = id
-    setTimeout(() => {
-      if (copied.value === id) copied.value = ''
-    }, 1500)
-  } catch {
-    window.prompt('Link to this level', url)
-  }
-}
-
 const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', long: 'Long' }
 </script>
 
@@ -125,9 +111,6 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
             <span class="t">{{ l.title }}</span>
             <span class="m">by {{ l.author }} · {{ SIZE_TEXT[l.size] ?? l.size }} · {{ ago(l.createdAt) }}</span>
             <span class="p">▶ {{ l.plays }} {{ l.plays === 1 ? 'play' : 'plays' }}</span>
-          </button>
-          <button class="link" type="button" :aria-label="`Copy link to ${l.title}`" @click="copyLink(l.id)">
-            {{ copied === l.id ? '✓' : '🔗' }}
           </button>
         </li>
       </ul>
@@ -308,16 +291,6 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   font-size: 13px;
   font-weight: 700;
   color: var(--muted);
-}
-
-.link {
-  width: 46px;
-  cursor: pointer;
-  font-size: 18px;
-  color: var(--text);
-  background: transparent;
-  border: 3px solid var(--line);
-  border-radius: 16px;
 }
 
 .note {

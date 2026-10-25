@@ -21,8 +21,10 @@ const props = withDefaults(
     hasNext?: boolean
     intro?: { number: number; title: string; label?: string } | null
     board?: BoardState | null
+    /** Link zum Level (nur Community-Level): zeigt im Ergebnis einen Teilen-Knopf */
+    shareUrl?: string | null
   }>(),
-  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null },
+  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null },
 )
 const emit = defineEmits<{
   exit: []
@@ -112,6 +114,39 @@ watch(
     }
   },
 )
+
+const shareNote = ref('')
+let shareTimer: ReturnType<typeof setTimeout> | undefined
+
+function flashShare(text: string): void {
+  shareNote.value = text
+  clearTimeout(shareTimer)
+  shareTimer = setTimeout(() => (shareNote.value = ''), 2000)
+}
+
+/** Teilen-Dialog des Geräts, sonst Link in die Zwischenablage */
+async function share(): Promise<void> {
+  const url = props.shareUrl
+  if (!url) return
+  const title = props.intro?.title ?? 'Plungee'
+  const data = { title, text: `I finished "${title}" in ${timeText.value} in Plungee. Can you beat it?`, url }
+  try {
+    if (typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare(data))) {
+      await navigator.share(data)
+      return
+    }
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return // abgebrochen: nichts weiter tun
+  }
+  try {
+    await navigator.clipboard.writeText(url)
+    flashShare('✓ Link copied')
+  } catch {
+    window.prompt('Link to this level', url)
+  }
+}
+
+onBeforeUnmount(() => clearTimeout(shareTimer))
 
 function restart(): void {
   game?.restart()
@@ -205,6 +240,9 @@ function restart(): void {
             <button class="cta" type="button" @click="restart">Retry</button>
             <button class="ghost" type="button" @click="emit('exit')">{{ exitText }}</button>
           </div>
+          <button v-if="shareUrl" class="ghost share" type="button" @click="share">
+            {{ shareNote || '🔗 Share this level' }}
+          </button>
           <button v-if="hasNext" class="cta next" type="button" @click="emit('next')">Next level ▶</button>
         </div>
       </div>
@@ -429,8 +467,9 @@ function restart(): void {
 .result {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  /* Passt das Fenster nicht auf den Bildschirm, scrollt es von oben statt oben abgeschnitten zu werden */
+  overflow-y: auto;
   background: rgba(10, 6, 30, 0.45);
   padding: 20px;
   animation: fade 0.25s ease-out;
@@ -454,6 +493,7 @@ function restart(): void {
   padding: 22px 22px 16px;
   text-align: center;
   box-shadow: 6px 6px 0 var(--outline);
+  margin: auto;
 }
 
 .title {
@@ -502,6 +542,10 @@ function restart(): void {
   color: var(--muted);
 }
 
+.share {
+  width: 100%;
+  margin-top: 10px;
+}
 .next {
   width: 100%;
   margin-top: 10px;
@@ -701,6 +745,22 @@ function restart(): void {
 }
 
 /* Schmale Bildschirme: Leiste enger, damit Zeit, Tode (auch dreistellig) und drei Knöpfe in eine Zeile passen */
+/* Niedrige Bildschirme: Ergebnisfenster enger, damit es möglichst ohne Scrollen passt */
+@media (max-height: 700px) {
+  .card {
+    padding: 14px 16px 12px;
+  }
+  .card .big {
+    font-size: 44px;
+  }
+  .board-list {
+    max-height: 96px;
+  }
+  .actions {
+    margin-top: 10px;
+  }
+}
+
 @media (max-width: 380px) {
   .hud {
     gap: 5px;
