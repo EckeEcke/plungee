@@ -807,11 +807,9 @@ onBeforeUnmount(() => {
             <input type="text" maxlength="16" placeholder="Anonymous" :value="authorName" @input="onAuthor" />
           </label>
           <p v-if="verified && !titleOk" class="note">Give your level a name of 3–32 characters first (field at the top of this menu).</p>
-          <div class="seg wide">
-            <button type="button" :disabled="!canUpload" @click="upload">
-              {{ uploading ? 'Uploading …' : alreadyUploaded ? '✓ Uploaded' : 'Upload for review' }}
-            </button>
-          </div>
+          <button class="cta" type="button" :disabled="!canUpload" @click="upload">
+            {{ uploading ? 'Uploading …' : alreadyUploaded ? '✓ Uploaded' : 'Upload for review' }}
+          </button>
           <template v-if="DEV">
             <p class="note">Local only: export the level as a <code>.level.ts</code> file for <code>src/levels/easy|normal|hard/</code> (the folder sets the difficulty). It is picked up by the game automatically (no test run needed).</p>
             <div class="seg wide">
@@ -1305,6 +1303,28 @@ input {
   font-weight: 700;
   line-height: 1.4;
   color: var(--muted);
+}
+
+.cta {
+  padding: 14px 16px;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--outline);
+  background: var(--accent);
+  border: 3px solid var(--outline);
+  border-radius: 16px;
+  box-shadow: 3px 3px 0 var(--outline);
+  cursor: pointer;
+}
+
+.cta:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--outline);
+}
+
+.cta:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .ghost {
