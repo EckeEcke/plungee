@@ -169,14 +169,14 @@ function drawLashes(ctx: CanvasRenderingContext2D, th: CharacterColors, pose: Ch
   for (const side of [-1, 1]) {
     const cx = side * ex0 + pose.face
     // Wimpern: Winkel von senkrecht nach oben; der mittlere Strich steht genau über der Augenmitte, die anderen fächern symmetrisch auf
-    ctx.lineWidth = 0.9
+    ctx.lineWidth = 0.7
     ctx.beginPath()
     for (const deg of [-26, 0, 26]) {
       const a = (deg * Math.PI) / 180
       const dx = side * Math.sin(a)
       const dy = -Math.cos(a)
-      const gap = 0.15
-      const len = 1.1
+      const gap = 0.4
+      const len = 0.6
       // Die Striche schließen außen an den Augenrand an (ragen nicht ins Weiß); die Spitzen bleiben unter der Körperlinie
       ctx.moveTo(clampX(cx + dx * (er + gap)), EYE_Y + dy * (er + gap))
       ctx.lineTo(clampX(cx + dx * (er + gap + len)), Math.max(LASH_MIN_Y, EYE_Y + dy * (er + gap + len)))

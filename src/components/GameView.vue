@@ -8,7 +8,7 @@ import type { Theme } from '../game/theme'
 import { medalFor, medalTargets } from '../game/medals'
 import { compileLevel, formatTicks, type LevelData } from '../sim'
 import MedalIcon from './MedalIcon.vue'
-import type { BoardState } from '../online/api'
+import { loadName, type BoardState } from '../online/api'
 
 const props = withDefaults(
   defineProps<{
@@ -30,7 +30,11 @@ const emit = defineEmits<{
   exit: []
   next: []
   finished: [result: { ticks: number; deaths: number; replay: string }]
+  /** Name für die Bestenliste; null = anonym senden */
+  name: [name: string | null]
 }>()
+
+const nameDraft = ref(loadName())
 
 const column = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -219,6 +223,21 @@ function restart(): void {
             <span class="badge-text">★ New best!</span>
           </div>
           <div v-if="board" class="board" aria-live="polite">
+            <form v-if="board.status === 'needsName'" class="name-form" @submit.prevent="emit('name', nameDraft)">
+              <b>Post your time</b>
+              <p class="board-note">Everyone can see your name on the leaderboard.</p>
+              <input
+                v-model="nameDraft"
+                type="text"
+                maxlength="16"
+                placeholder="Your name"
+                autocomplete="nickname"
+                aria-label="Your name"
+              />
+              <button class="cta" type="submit" :disabled="!nameDraft.trim()">Post time</button>
+              <button class="link" type="button" @click="emit('name', null)">Post as Anonymous</button>
+            </form>
+            <template v-else>
             <div class="board-head">
               <b>Best times</b>
               <span v-if="board.board && board.board.rank">Your rank {{ board.board.rank }} / {{ board.board.total }}</span>
@@ -234,6 +253,7 @@ function restart(): void {
                   <span class="t">{{ formatTicks(r.ticks) }}</span>
                 </li>
               </ol>
+            </template>
             </template>
           </div>
           <div class="actions">
@@ -639,6 +659,39 @@ function restart(): void {
   border-top: 1.5px dashed rgba(255, 255, 255, 0.18);
   padding-top: 8px;
   text-align: left;
+}
+
+.name-form {
+  display: grid;
+  gap: 8px;
+}
+
+.name-form input {
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 8px 10px;
+  color: var(--text);
+  background: transparent;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+}
+
+.name-form .cta:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.name-form .link {
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  padding: 2px;
 }
 
 .board-head {
