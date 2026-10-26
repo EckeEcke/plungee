@@ -6,6 +6,9 @@ import GameView from './components/GameView.vue'
 import OnlineView from './components/OnlineView.vue'
 import AdminView from './components/AdminView.vue'
 import WeeklyView from './components/WeeklyView.vue'
+import CharacterView from './components/CharacterView.vue'
+import CharacterCanvas from './components/CharacterCanvas.vue'
+import { applyLook, look } from './game/look'
 import SoundIcon from './components/SoundIcon.vue'
 import { audioSettings } from './audio/audio'
 import { startOnlineLevel, submitTime, submitWeeklyTime, type BoardState, type OnlineMeta, type WeeklyInfo } from './online/api'
@@ -14,7 +17,7 @@ import { loadProgress, recordResult } from './game/progress'
 import { themeById } from './game/theme'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from './levels'
 
-const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'admin'>('menu')
+const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin'>('menu')
 
 /** Gespeicherte Wahl zuerst, sonst die Systemeinstellung (im Webview der Reddit-App erbt sie das Gerät) */
 function initialDark(): boolean {
@@ -34,7 +37,9 @@ function initialDark(): boolean {
 
 const dark = ref(initialDark())
 const themeId = computed(() => (dark.value ? 'memphis-dark' : 'memphis-light'))
-const theme = computed(() => themeById(themeId.value))
+/** Gewähltes Theme mit der Körperfarbe der Figur (Seite „Character“) */
+const baseTheme = computed(() => themeById(themeId.value))
+const theme = computed(() => applyLook(baseTheme.value, look))
 function loadDifficulty(): Difficulty {
   try {
     const v = localStorage.getItem('plunge:difficulty')
@@ -238,6 +243,8 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     @finished="onWeeklyFinished"
   />
 
+  <CharacterView v-else-if="screen === 'character'" :theme="baseTheme" @exit="screen = 'menu'" />
+
   <WeeklyView v-else-if="screen === 'weekly'" :theme="theme" @exit="screen = 'menu'" @play="playWeekly" />
 
   <OnlineView v-else-if="screen === 'online'" :theme="theme" @exit="screen = 'menu'" @play="playOnline($event)" />
@@ -273,20 +280,8 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
     <div class="content">
       <div class="logo">
-        <!-- Gleiche Zeichnung wie der Spielcharakter (renderer.ts drawPlayer) -->
-        <svg class="face" viewBox="0 0 64 64" aria-hidden="true">
-          <defs>
-            <clipPath id="face-body"><rect x="6" y="6" width="52" height="52" rx="17" /></clipPath>
-          </defs>
-          <rect x="6" y="6" width="52" height="52" rx="17" class="f-body" />
-          <rect x="6" y="41" width="52" height="17" clip-path="url(#face-body)" class="f-shade" />
-          <ellipse cx="17.7" cy="16.4" rx="7.4" ry="4.3" transform="rotate(-28.6 17.7 16.4)" class="f-gloss" />
-          <rect x="6" y="6" width="52" height="52" rx="17" class="f-line" />
-          <circle cx="18.6" cy="27.7" r="10.8" class="f-eye" />
-          <circle cx="45.4" cy="27.7" r="10.8" class="f-eye" />
-          <circle cx="18.6" cy="27.7" r="5.4" class="f-pupil" />
-          <circle cx="45.4" cy="27.7" r="5.4" class="f-pupil" />
-        </svg>
+        <!-- Dieselbe Zeichnung wie im Spiel, mit dem gewählten Aussehen -->
+        <CharacterCanvas class="face" :colors="theme" :look="look" :size="104" />
         <h1>PLUNGEE</h1>
         <p>Fall fast. Land smart.</p>
       </div>
@@ -296,6 +291,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
         <button class="build" type="button" @click="screen = 'weekly'">Weekly challenge</button>
         <button class="build" type="button" @click="screen = 'online'">Community levels</button>
         <button class="build" type="button" @click="screen = 'edit'">Build a level</button>
+        <button class="build" type="button" @click="screen = 'character'">Character</button>
       </div>
 
       <div class="snd-row">
@@ -407,39 +403,8 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
 .face {
   display: inline-block;
-  width: 78px;
-  height: 78px;
-  overflow: visible;
   filter: drop-shadow(4px 4px 0 var(--outline));
   animation: bob 1.8s ease-in-out infinite;
-}
-
-.f-body {
-  fill: var(--player);
-}
-
-.f-shade {
-  fill: var(--player-shade);
-}
-
-.f-gloss {
-  fill: #fff;
-  opacity: 0.55;
-}
-
-.f-line {
-  fill: none;
-  stroke: var(--outline);
-  stroke-width: 5;
-  stroke-linejoin: round;
-}
-
-.f-eye {
-  fill: #fff;
-}
-
-.f-pupil {
-  fill: var(--outline);
 }
 
 @keyframes bob {

@@ -33,6 +33,8 @@ import {
   type SimEvent,
   type World,
 } from '../sim'
+import { drawCharacter } from './character'
+import { look } from './look'
 import { Particles } from './particles'
 import type { Theme } from './theme'
 
@@ -1095,61 +1097,14 @@ export class Renderer {
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
 
-    ctx.fillStyle = th.player
-    rr(ctx, -6, -12, 12, 12, 4, 4, 4, 4)
-    ctx.fill()
-    ctx.fillStyle = th.playerShade
-    rr(ctx, -6, -4, 12, 4, 0, 0, 4, 4)
-    ctx.fill()
-    ctx.strokeStyle = th.outline
-    ctx.lineWidth = 1.4
-    rr(ctx, -6, -12, 12, 12, 4, 4, 4, 4)
-    ctx.stroke()
-
-    ctx.globalAlpha = 0.55
-    ctx.fillStyle = '#ffffff'
-    ctx.beginPath()
-    ctx.ellipse(-3.3, -9.6, 1.7, 1, -0.5, 0, TAU)
-    ctx.fill()
-    ctx.globalAlpha = 1
-
-    // Augen: groß beim Fallen, Strich beim Blinzeln und bei Betäubung
-    const ey = -7
-    const face = p.facing * 0.7
-    const blink = Math.floor(this.time * 60) % 210 < 6
-    if (p.stun > 0) {
-      ctx.strokeStyle = th.outline
-      ctx.lineWidth = 1.4
-      ctx.beginPath()
-      ctx.moveTo(-4.8 + face, ey - 1.4)
-      ctx.lineTo(-1.6 + face, ey + 1.2)
-      ctx.moveTo(4.8 + face, ey - 1.4)
-      ctx.lineTo(1.6 + face, ey + 1.2)
-      ctx.stroke()
-    } else if (blink) {
-      ctx.strokeStyle = th.outline
-      ctx.lineWidth = 1.3
-      ctx.beginPath()
-      ctx.moveTo(-4.6 + face, ey)
-      ctx.lineTo(-1.4 + face, ey)
-      ctx.moveTo(4.6 + face, ey)
-      ctx.lineTo(1.4 + face, ey)
-      ctx.stroke()
-    } else {
-      const er = 2.5 + fall * 0.8
-      const ox = clamp(p.vx / 110, -1, 1) * 1.1
-      const oy = vyN * 1.0
-      for (const ex of [-3.1, 3.1]) {
-        ctx.fillStyle = th.eyeWhite
-        ctx.beginPath()
-        ctx.arc(ex + face, ey, er, 0, TAU)
-        ctx.fill()
-        ctx.fillStyle = th.pupil
-        ctx.beginPath()
-        ctx.arc(ex + face + ox, ey + oy, 1.25 + fall * 0.2, 0, TAU)
-        ctx.fill()
-      }
-    }
+    drawCharacter(ctx, th, look, {
+      face: p.facing * 0.7,
+      ox: clamp(p.vx / 110, -1, 1) * 1.1,
+      oy: vyN * 1.0,
+      fall,
+      stun: p.stun > 0,
+      blink: Math.floor(this.time * 60) % 210 < 6,
+    })
     ctx.restore()
   }
 }
