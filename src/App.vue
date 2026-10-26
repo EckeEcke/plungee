@@ -11,7 +11,17 @@ import CharacterCanvas from './components/CharacterCanvas.vue'
 import { applyLook, look } from './game/look'
 import SoundIcon from './components/SoundIcon.vue'
 import { audioSettings } from './audio/audio'
-import { startOnlineLevel, submitTime, submitWeeklyTime, type BoardState, type OnlineMeta, type WeeklyInfo } from './online/api'
+import {
+  loadName,
+  saveName,
+  startOnlineLevel,
+  submitTime,
+  submitWeeklyTime,
+  type BoardState,
+  type OnlineMeta,
+  type SubmitResult,
+  type WeeklyInfo,
+} from './online/api'
 import type { LevelData } from './sim'
 import { loadProgress, recordResult } from './game/progress'
 import { themeById } from './game/theme'
@@ -114,18 +124,46 @@ function levelLink(id: string): string {
   return `${location.origin}${location.pathname}?level=${id}`
 }
 
+// Zeiten werden nie ungefragt anonym gesendet: ohne gespeicherten Namen fragt die Ergebnis-Karte erst nach
+let pendingPost: (() => Promise<void>) | null = null
+/** Wer einmal „anonym“ wählt, wird in dieser Sitzung nicht bei jedem Versuch neu gefragt */
+let anonymousOk = false
+
+async function post(stillCurrent: () => boolean, send: () => Promise<SubmitResult>): Promise<void> {
+  const run = async (): Promise<void> => {
+    pendingPost = null
+    board.value = { status: 'loading' }
+    try {
+      const r = await send()
+      if (stillCurrent()) board.value = { status: 'ok', improved: r.improved, board: r }
+    } catch (e) {
+      if (stillCurrent()) {
+        board.value = { status: 'error', error: e instanceof Error ? e.message : 'Could not send your time' }
+      }
+    }
+  }
+  if (!anonymousOk && loadName().trim() === '') {
+    pendingPost = run
+    board.value = { status: 'needsName' }
+    return
+  }
+  await run()
+}
+
+function onNameChosen(name: string | null): void {
+  const clean = name?.trim().slice(0, 16) ?? ''
+  if (clean) saveName(clean)
+  else anonymousOk = true
+  void pendingPost?.()
+}
+
 async function onOnlineFinished(res: { ticks: number; deaths: number; replay: string }): Promise<void> {
   const lv = onlineLevel.value
   if (!lv) return
-  board.value = { status: 'loading' }
-  try {
-    const r = await submitTime(lv.meta.id, res.replay)
-    if (onlineLevel.value === lv) board.value = { status: 'ok', improved: r.improved, board: r }
-  } catch (e) {
-    if (onlineLevel.value === lv) {
-      board.value = { status: 'error', error: e instanceof Error ? e.message : 'Could not send your time' }
-    }
-  }
+  await post(
+    () => onlineLevel.value === lv,
+    () => submitTime(lv.meta.id, res.replay),
+  )
 }
 
 // --- Weekly Challenge ---------------------------------------------------------------
@@ -141,15 +179,10 @@ function playWeekly(info: WeeklyInfo): void {
 async function onWeeklyFinished(res: { ticks: number; deaths: number; replay: string }): Promise<void> {
   const lv = weeklyLevel.value
   if (!lv) return
-  board.value = { status: 'loading' }
-  try {
-    const r = await submitWeeklyTime(res.replay)
-    if (weeklyLevel.value === lv) board.value = { status: 'ok', improved: r.improved, board: r }
-  } catch (e) {
-    if (weeklyLevel.value === lv) {
-      board.value = { status: 'error', error: e instanceof Error ? e.message : 'Could not send your time' }
-    }
-  }
+  await post(
+    () => weeklyLevel.value === lv,
+    () => submitWeeklyTime(res.replay),
+  )
 }
 
 onMounted(() => {
@@ -227,6 +260,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     exit-text="Community levels"
     @exit="screen = 'online'"
     @finished="onOnlineFinished"
+    @name="onNameChosen"
   />
 
   <GameView
@@ -241,6 +275,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     exit-text="Weekly challenge"
     @exit="screen = 'weekly'"
     @finished="onWeeklyFinished"
+    @name="onNameChosen"
   />
 
   <CharacterView v-else-if="screen === 'character'" :theme="baseTheme" @exit="screen = 'menu'" />
@@ -465,7 +500,8 @@ h1 {
   font-weight: 900;
   padding: 10px 34px;
   color: var(--menu-text);
-  background: transparent;
+  /* deckend, damit die Deko dahinter nicht durch den Button scheint */
+  background: var(--bg2);
   border: 3px solid var(--line);
   border-radius: 16px;
 }
@@ -530,7 +566,7 @@ h1 {
   font-size: 14px;
   font-weight: 800;
   color: var(--muted);
-  background: transparent;
+  background: var(--bg2);
   border: 3px solid var(--line);
   border-radius: 999px;
 }

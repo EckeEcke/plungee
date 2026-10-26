@@ -60,6 +60,9 @@ export class InputController {
   }
 
   private key(e: KeyboardEvent, down: boolean): void {
+    // Tippen in Eingabefeldern (z. B. Name im Ergebnis) darf weder steuern noch neu starten
+    const t = e.target as Element | null
+    if (t && t.closest && t.closest('input, textarea, [contenteditable]')) return
     if (e.repeat && down) return
     switch (e.code) {
       case 'ArrowLeft':

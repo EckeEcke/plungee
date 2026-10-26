@@ -87,6 +87,11 @@ function onName(e: Event): void {
             <button class="cta" type="button" @click="emit('play', info)">▶ Play</button>
           </section>
 
+          <label class="name">
+            <span>Playing as</span>
+            <input type="text" maxlength="16" placeholder="Anonymous" :value="name" @input="onName" />
+          </label>
+
           <section class="card">
             <div class="head">
               <b>Best times</b>
@@ -116,10 +121,6 @@ function onName(e: Event): void {
             </ol>
           </section>
 
-          <label class="name">
-            <span>Your name</span>
-            <input type="text" maxlength="16" placeholder="Anonymous" :value="name" @input="onName" />
-          </label>
         </template>
       </div>
     </div>

@@ -26,7 +26,8 @@ export interface Board {
 
 /** Bestzeiten im Ergebnis-Fenster eines Community-Levels */
 export interface BoardState {
-  status: 'loading' | 'ok' | 'error'
+  /** needsName: Zeit ist noch nicht gesendet, der Spieler wählt erst Name oder anonym */
+  status: 'loading' | 'ok' | 'error' | 'needsName'
   error?: string
   improved?: boolean
   board?: Board
