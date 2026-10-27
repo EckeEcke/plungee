@@ -137,11 +137,11 @@ describe('Quetscher: Zeitverlauf', () => {
   })
 })
 
-describe('Quetscher: Kollision', () => {
+describe('Quetscher: fester Block', () => {
   // Block 2×2 in Spalten 6 und 7, Ruhelage Zeilen 3-4, schlägt 5 Tiles nach unten bis auf den Boden (Zeilen 8-9)
   const level = (col: number, period = 100): LevelData => floor(col).crusher(6, 3, 'd', 5, { size: 2, period }).build()
 
-  it('tötet den Spieler unter dem Schlag, nicht vorher', () => {
+  it('zerquetscht den Spieler am Boden, nicht vorher', () => {
     const events: SimEvent[] = []
     const w = new World(compileLevel(level(7)))
     w.onEvent = (e) => events.push(e)
@@ -175,13 +175,72 @@ describe('Quetscher: Kollision', () => {
     expect(run1.p).toEqual(run2.p)
   })
 
-  it('schlägt auch zur Seite', () => {
-    for (const [dir, col, row, len] of [['r', 1, 9, 5], ['l', 13, 9, 6]] as const) {
-      const data = new LevelBuilder('short').plat(10, 0, 15).spawn(7, 9).goal(0, 0).crusher(col, row - 1, dir, len, { size: 2, period: 100 }).build()
-      const w = new World(compileLevel(data))
-      run(w, 0, 62)
-      expect(w.deaths).toBe(1)
-    }
+  it('Berühren ist harmlos: man läuft dagegen und wird aufgehalten', () => {
+    // Quetscher ruht auf dem Boden (Zeilen 8-9) und bewegt sich nur 1 Tile; Spieler läuft von links dagegen
+    const data = floor(2).crusher(6, 8, 'u', 1, { size: 2, period: 600 }).build()
+    const w = new World(compileLevel(data))
+    run(w, 1, 120)
+    expect(w.deaths).toBe(0)
+    expect(w.p.x).toBeCloseTo(6 * TILE - PLAYER_W, 3)
+  })
+
+  it('man kann darauf stehen und fährt mit nach unten', () => {
+    const w = new World(compileLevel(level(14)))
+    // Den Spieler auf den ruhenden Block setzen (Oberkante bei Zeile 3)
+    w.p.x = 6 * TILE + 8
+    w.p.y = 3 * TILE - PLAYER_H
+    run(w, 0, 5)
+    expect(w.p.onGround).toBe(true)
+    expect(w.ridingCrusher).toBe(0)
+    // Der Schlag beginnt nach 50 Ticks: danach liegt der Spieler auf dem unten liegenden Block
+    run(w, 0, 90)
+    expect(w.deaths).toBe(0)
+    expect(w.p.onGround).toBe(true)
+    const r = w.crusherRects[0]
+    expect(w.p.y + PLAYER_H).toBeCloseTo(r.y, 2)
+    expect(r.y).toBeGreaterThan(3 * TILE)
+  })
+
+  it('wird oben stehend gegen die Decke gedrückt und zerquetscht', () => {
+    // Block fährt in der Haltephase unten, Decke über seiner Ruhelage; Rückweg quetscht den Spieler an der Decke
+    const data = floor(14).plat(5, 6, 7).crusher(6, 6, 'd', 3, { size: 2, period: 150, phase: 0.6 }).build()
+    const w = new World(compileLevel(data))
+    const r0 = w.crusherRects[0]
+    w.p.x = r0.x + 8
+    w.p.y = r0.y - PLAYER_H
+    run(w, 0, 3)
+    expect(w.ridingCrusher).toBe(0)
+    run(w, 0, 80)
+    expect(w.deaths).toBe(1)
+  })
+
+  it('wird seitlich gegen eine Wand gedrückt und zerquetscht', () => {
+    const data = floor(7).crusher(1, 8, 'r', 5, { size: 2, period: 100 }).wall(8, 8, 9).build()
+    const w = new World(compileLevel(data))
+    run(w, 0, 62)
+    expect(w.deaths).toBe(1)
+  })
+
+  it('wird seitlich nur weggeschoben, wenn dahinter Platz ist', () => {
+    const data = floor(7).crusher(1, 8, 'r', 5, { size: 2, period: 100 }).build()
+    const w = new World(compileLevel(data))
+    run(w, 0, 62)
+    expect(w.deaths).toBe(0)
+    // Der Spieler steht rechts neben dem Block
+    expect(w.p.x).toBeGreaterThanOrEqual(w.crusherRects[0].x + 2 * TILE - 0.01)
+  })
+
+  it('trägt einen Spieler auf der Oberseite zur Seite mit', () => {
+    const data = floor(14).crusher(1, 8, 'r', 6, { size: 2, period: 150, phase: 0.45 }).build()
+    const w = new World(compileLevel(data))
+    const r0 = w.crusherRects[0]
+    w.p.x = r0.x + 6
+    w.p.y = r0.y - PLAYER_H
+    run(w, 0, 3)
+    const x0 = w.p.x
+    run(w, 0, 30)
+    expect(w.deaths).toBe(0)
+    expect(w.p.x).toBeGreaterThan(x0 + 20)
   })
 })
 

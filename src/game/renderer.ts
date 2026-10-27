@@ -123,6 +123,8 @@ export class Renderer {
   private springAnim: number[] = []
   /** Letzter Tick, für den Quetscher-Aufschläge schon verarbeitet wurden */
   private crusherTick = -1
+  /** Wird aufgerufen, wenn ein Quetscher im Bild aufschlägt (size = Kantenlänge in Tiles); der Ton hängt daran */
+  onCrusherImpact: ((size: number) => void) | null = null
   private checkpointAnim: number[] = []
   readonly particles = new Particles()
 
@@ -367,6 +369,7 @@ export class Renderer {
         spread: Math.PI * 0.9,
       })
       this.shake = Math.max(this.shake, 2.5 + c.size)
+      this.onCrusherImpact?.(c.size)
     }
   }
 

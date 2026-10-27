@@ -80,6 +80,8 @@ export class Game {
     private onHud: (h: HudState) => void,
   ) {
     this.renderer = new Renderer(canvas, theme)
+    // Große Quetscher klingen lauter; nur im Bild (die Prüfung macht der Renderer)
+    this.renderer.onCrusherImpact = (size) => playSfx('crusher', 0.55 + 0.15 * size)
     this.input = new InputController(container)
     this.input.onRestart = () => this.restart()
 

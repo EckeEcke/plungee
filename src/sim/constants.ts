@@ -60,7 +60,7 @@ export const MOVER_H = 8
 export const MAX_MOVER_LEN = 12
 export const MAX_MOVER_W = 4
 
-// Quetscher: Block gleitet entlang einer Bahn und tötet bei Berührung
+// Quetscher: fester Block, gleitet entlang einer Bahn, schiebt und trägt den Spieler und zerquetscht ihn nur an Wänden
 export const MAX_CRUSHER_LEN = 12
 export const MAX_CRUSHER_SIZE = 3
 /** Anteile einer Periode: Ruhe, Schlag, Halten, Rückweg (Summe 1) */
@@ -69,8 +69,6 @@ export const CRUSHER_SLAM = 0.08
 export const CRUSHER_HOLD = 0.12
 /** Ticks vor dem Schlag, in denen der Quetscher wackelt (nur Darstellung) */
 export const CRUSHER_WARN_TICKS = 24
-/** Hitbox schrumpft um so viele Einheiten je Seite (faire Kollision) */
-export const CRUSHER_HIT_INSET = 1
 
 // Seitenfeder
 export const SPRING_SIDE_POWER = [300, 460] as const

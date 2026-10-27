@@ -27,7 +27,8 @@ export type EntityData =
   | { t: 'mover'; x: number; y: number; axis: 'h' | 'v'; len: number; w: number; period: number; phase: number }
   /**
    * Quetscher: size × size Tiles großer Block mit Gesicht. Ruhelage = Zelle (x, y) links oben. Er schlägt in
-   * Richtung dir um len Tiles zu (schnell), bleibt kurz liegen und fährt langsam zurück. Jede Berührung tötet.
+   * Richtung dir um len Tiles zu (schnell), bleibt kurz liegen und fährt langsam zurück. Er ist ein fester Block:
+   * er schiebt und trägt den Spieler und zerquetscht ihn nur, wenn der nicht ausweichen kann (Wand, Boden, Decke).
    * period = Ticks eines Zyklus, phase 0..1.
    */
   | { t: 'crusher'; x: number; y: number; dir: Dir; size: 1 | 2 | 3; len: number; period: number; phase: number }

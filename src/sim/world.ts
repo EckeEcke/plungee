@@ -13,7 +13,6 @@ import {
   ACCEL_AIR,
   BELT_SPEED,
   CRUMBLE_DELAY,
-  CRUSHER_HIT_INSET,
   CRUMBLE_REGROW,
   ICE_ACCEL,
   SPRING_SIDE_LIFT,
@@ -34,7 +33,7 @@ import {
   VOID_MARGIN,
 } from './constants'
 import { crusherState, hammerState, laserPhase, sawPos } from './hazards'
-import type { CompiledCrusher, CompiledLevel } from './level'
+import type { CompiledLevel } from './level'
 import { blinkSolid, isBlinkKind, K_BELT_L, K_BELT_R, K_BRITTLE, K_GATE_D, K_GATE_L, K_GATE_R, K_ICE, K_ONEWAY } from './tiles'
 import { approach, clamp } from './mathx'
 import type { InputDir, Rect } from './types'
@@ -65,6 +64,11 @@ export interface PlayerState {
   deadTimer: number
 }
 
+/** Wie overlaps, aber nur bei echter Überlappung (Berührung der Kanten zählt nicht) */
+function overlapsInner(px: number, py: number, r: Rect): boolean {
+  return px < r.x + r.w - EPS && px + PLAYER_W > r.x + EPS && py < r.y + r.h - EPS && py + PLAYER_H > r.y + EPS
+}
+
 function overlaps(px: number, py: number, r: Rect): boolean {
   return px < r.x + r.w && px + PLAYER_W > r.x && py < r.y + r.h && py + PLAYER_H > r.y
 }
@@ -90,6 +94,10 @@ export class World {
   surface = 0
   /** Index der beweglichen Plattform, auf der der Spieler steht (-1 = keine) */
   riding = -1
+  /** Index des Quetschers, auf dem der Spieler steht (-1 = keiner) */
+  ridingCrusher = -1
+  /** Aktuelle Rechtecke der Quetscher (Lage zum Ende des laufenden Ticks), fest für Kollision und Zerquetschen */
+  crusherRects: Rect[] = []
   /** Blinkzellen, in denen der Spieler zu Beginn des Ticks steckt: bleiben durchlässig, bis er draußen ist */
   private blinkIgnore: number[] = []
 
@@ -112,6 +120,7 @@ export class World {
     this.prevX = this.p.x
     this.prevY = this.p.y
     this.crumble = new Int32Array(level.cols * level.rows).fill(-1)
+    this.syncCrushers()
   }
 
   /** Unabhängige Kopie des Simulationszustands (z. B. für Suchverfahren und Tests). */
@@ -130,6 +139,8 @@ export class World {
     w.crumble = this.crumble.slice()
     w.surface = this.surface
     w.riding = this.riding
+    w.ridingCrusher = this.ridingCrusher
+    w.syncCrushers()
     return w
   }
 
@@ -174,6 +185,13 @@ export class World {
     p.vy += GRAVITY * DT
     if (p.vy > TERMINAL_VY) p.vy = TERMINAL_VY
 
+    // Quetscher fahren zuerst: sie schieben den Spieler, tragen ihn oder zerquetschen ihn
+    this.advanceCrushers()
+    if (p.dead) {
+      this.tick++
+      return
+    }
+
     // Bewegung mit Kollision
     const wasOnGround = p.onGround
     const impact = p.vy
@@ -184,6 +202,7 @@ export class World {
     const bottomBefore = p.y + PLAYER_H
     this.moveY(p.vy * DT)
     this.landOnMovers(bottomBefore)
+    this.ridingCrusher = this.crusherUnderfoot()
     if (p.onGround && !wasOnGround && impact > LAND_EVENT_VY) {
       this.emit({ type: 'land', strength: impact })
     }
@@ -208,6 +227,7 @@ export class World {
     this.crumble.fill(-1)
     this.surface = 0
     this.riding = -1
+    this.ridingCrusher = -1
     this.prevX = p.x
     this.prevY = p.y
     this.emit({ type: 'respawn', x: p.x, y: p.y })
@@ -262,13 +282,6 @@ export class World {
       const dy = cy - c.y
       if (dx * dx + dy * dy < SAW_HIT_R * SAW_HIT_R) {
         this.kill('saw')
-        return
-      }
-    }
-
-    for (const c of lv.crushers) {
-      if (this.crusherHits(c, now)) {
-        this.kill('crusher')
         return
       }
     }
@@ -341,25 +354,78 @@ export class World {
     return { x: c.x0 + c.dx * f, y: c.y0 + c.dy * f }
   }
 
+  /** Rechtecke aller Quetscher an die Lage zum aktuellen Tick setzen */
+  private syncCrushers(): void {
+    const lv = this.level
+    this.crusherRects = lv.crushers.map((c, i) => {
+      const p = this.crusherPos(i, this.tick)
+      return { x: p.x, y: p.y, w: c.size * TILE, h: c.size * TILE }
+    })
+  }
+
   /**
-   * Trifft der Quetscher den Spieler? Geprüft wird die Fläche, die er seit dem letzten Tick überstrichen hat,
-   * damit ein schneller Schlag den Spieler nicht überspringt.
+   * Fährt alle Quetscher zur Lage des nächsten Ticks, in kleinen Teilschritten (kein Überspringen).
+   * Ein Quetscher ist fest: Er schiebt den Spieler vor sich her und trägt ihn, wenn er darauf steht. Getötet wird
+   * nur, wer dabei gegen Wand, Boden, Decke oder einen anderen Quetscher gedrückt wird und nicht ausweichen kann.
    */
-  private crusherHits(c: CompiledCrusher, now: number): boolean {
+  private advanceCrushers(): void {
+    const lv = this.level
     const p = this.p
-    const a = crusherState(c, now - 1).f
-    const b = crusherState(c, now).f
-    const size = c.size * TILE
-    const ax = c.x0 + c.dx * a
-    const ay = c.y0 + c.dy * a
-    const bx = c.x0 + c.dx * b
-    const by = c.y0 + c.dy * b
-    const inset = CRUSHER_HIT_INSET
-    const x0 = Math.min(ax, bx) + inset
-    const y0 = Math.min(ay, by) + inset
-    const x1 = Math.max(ax, bx) + size - inset
-    const y1 = Math.max(ay, by) + size - inset
-    return p.x < x1 && p.x + PLAYER_W > x0 && p.y < y1 && p.y + PLAYER_H > y0
+    for (let i = 0; i < lv.crushers.length; i++) {
+      const c = lv.crushers[i]
+      const size = c.size * TILE
+      const a = this.crusherPos(i, this.tick)
+      const b = this.crusherPos(i, this.tick + 1)
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / MAX_STEP))
+      const sx = dx / n
+      const sy = dy / n
+      const riding = this.ridingCrusher === i
+      for (let k = 1; k <= n; k++) {
+        const rect = this.crusherRects[i]
+        rect.x = k === n ? b.x : a.x + sx * k
+        rect.y = k === n ? b.y : a.y + sy * k
+        if (riding) {
+          // Wer oben steht, fährt mit nach unten oder zur Seite (nach oben schiebt ihn die Kante ohnehin)
+          if (sy > 0) p.y += sy
+          if (sx !== 0 && this.fitsAt(p.x + sx, p.y)) p.x += sx
+        }
+        if (!overlapsInner(p.x, p.y, rect) || (sx === 0 && sy === 0)) continue
+        // Schieben in Fahrtrichtung
+        if (Math.abs(sy) >= Math.abs(sx)) {
+          p.y = sy > 0 ? rect.y + size : rect.y - PLAYER_H
+          // Nach unten geschoben: Aufwärtsschwung endet. Nach oben geschoben bleibt vy, damit die Figur gleich wieder aufsetzt.
+          if (sy > 0 && p.vy < 0) p.vy = 0
+        } else {
+          p.x = sx > 0 ? rect.x + size : rect.x - PLAYER_W
+          if (sx > 0 ? p.vx < 0 : p.vx > 0) p.vx = 0
+        }
+        if (!this.fitsAt(p.x, p.y) || this.overlapsOtherCrusher(i)) {
+          this.kill('crusher')
+          return
+        }
+      }
+    }
+  }
+
+  private overlapsOtherCrusher(self: number): boolean {
+    const p = this.p
+    for (let j = 0; j < this.crusherRects.length; j++) {
+      if (j !== self && overlapsInner(p.x, p.y, this.crusherRects[j])) return true
+    }
+    return false
+  }
+
+  /** Quetscher, auf dessen Oberseite der Spieler gerade steht (-1 = keiner) */
+  private crusherUnderfoot(): number {
+    const p = this.p
+    if (!p.onGround) return -1
+    for (let i = 0; i < this.crusherRects.length; i++) {
+      const r = this.crusherRects[i]
+      if (Math.abs(p.y + PLAYER_H - r.y) <= 0.01 && p.x < r.x + r.w - EPS && p.x + PLAYER_W > r.x + EPS) return i
+    }
+    return -1
   }
 
   // --- Kollision gegen das Tile-Raster ---------------------------------------
@@ -503,7 +569,7 @@ export class World {
     const p = this.p
     const lv = this.level
     this.surface = 0
-    if (!p.onGround || this.riding >= 0) return
+    if (!p.onGround || this.riding >= 0 || this.ridingCrusher >= 0) return
     const row = Math.floor((p.y + PLAYER_H + 0.5) / TILE)
     if (row < 0 || row >= lv.rows) return
     const left = Math.max(0, Math.floor(p.x / TILE))
@@ -531,6 +597,14 @@ export class World {
       remaining -= step
       const before = p.x
       p.x += step
+      // Quetscher sind feste Wände
+      let blocked = false
+      const hit = this.crusherHit(step, 'x')
+      if (hit !== null) {
+        p.x = hit
+        p.vx = 0
+        blocked = true
+      }
       const top = Math.floor(p.y / TILE)
       const bottom = Math.floor((p.y + PLAYER_H - EPS) / TILE)
       if (step > 0) {
@@ -550,6 +624,7 @@ export class World {
           return
         }
       }
+      if (blocked) return
     }
   }
 
@@ -561,6 +636,15 @@ export class World {
       remaining -= step
       const beforeY = p.y
       p.y += step
+      // Quetscher sind feste Böden und Decken
+      let blocked = false
+      const hit = this.crusherHit(step, 'y')
+      if (hit !== null) {
+        p.y = hit
+        p.vy = 0
+        if (step > 0) p.onGround = true
+        blocked = true
+      }
       const left = Math.floor(p.x / TILE)
       const right = Math.floor((p.x + PLAYER_W - EPS) / TILE)
       if (step > 0) {
@@ -581,7 +665,19 @@ export class World {
           return
         }
       }
+      if (blocked) return
     }
+  }
+
+  /** Stößt der Spieler nach diesem Schritt an einen Quetscher? Gibt die korrigierte Koordinate zurück oder null. */
+  private crusherHit(step: number, axis: 'x' | 'y'): number | null {
+    const p = this.p
+    for (const r of this.crusherRects) {
+      if (!overlapsInner(p.x, p.y, r)) continue
+      if (axis === 'x') return step > 0 ? r.x - PLAYER_W : r.x + r.w
+      return step > 0 ? r.y - PLAYER_H : r.y + r.h
+    }
+    return null
   }
 
   private solidInRows(col: number, top: number, bottom: number): boolean {

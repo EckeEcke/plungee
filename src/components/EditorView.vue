@@ -75,7 +75,7 @@ const TOOL_HINTS: Record<ToolId, string> = {
   saw: 'The saw travels back and forth along the dashed track, even through walls. The end is clipped to the level edge.',
   mover: 'A one-way platform that carries you along its dashed track. You can jump up through it and land on it from above.',
   crusher:
-    'Slams in the chosen direction, then slowly pulls back. Touching it is deadly. The dashed outline shows where it ends up; it flinches before it strikes.',
+    'A solid block: slams in the chosen direction, then slowly pulls back. You can stand on it or run into it. It only crushes you against a wall, floor or ceiling. The dashed outline shows where it ends up; it flinches before it strikes.',
   checkpoint: 'Sets a respawn point. Tap again to remove it.',
   spawn: 'Tap to set the start point.',
   goal: 'Tap to set the goal.',
