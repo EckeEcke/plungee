@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import {
+  CRUSHER_REACHES,
+  CRUSHER_SIZES,
+  CRUSHER_SPEEDS,
   DIRS,
   HAMMER_AMPLITUDES,
   HAMMER_LENGTHS,
@@ -12,6 +15,7 @@ import {
   TILE_HINTS,
   TILE_OPTIONS,
   TOOLS,
+  crusherSpeedIndex,
   hammerPhasePatch,
   hammerPhaseQuarter,
   hammerSpeedIndex,
@@ -58,6 +62,7 @@ const ENTITY_LABELS: Record<EntityData['t'], string> = {
   hammer: 'Hammer',
   saw: 'Saw',
   mover: 'Mover',
+  crusher: 'Crusher',
 }
 const TOOL_HINTS: Record<ToolId, string> = {
   select: 'Tap an object to edit it, drag to move it.',
@@ -69,6 +74,8 @@ const TOOL_HINTS: Record<ToolId, string> = {
   hammer: 'The pivot can sit in mid-air. The dashed arc shows the swing.',
   saw: 'The saw travels back and forth along the dashed track, even through walls. The end is clipped to the level edge.',
   mover: 'A one-way platform that carries you along its dashed track. You can jump up through it and land on it from above.',
+  crusher:
+    'Slams in the chosen direction, then slowly pulls back. Touching it is deadly. The dashed outline shows where it ends up; it flinches before it strikes.',
   checkpoint: 'Sets a respawn point. Tap again to remove it.',
   spawn: 'Tap to set the start point.',
   goal: 'Tap to set the goal.',
@@ -165,7 +172,7 @@ const target = computed<EntityData | null>(() => {
     const e = c.selectedEntity
     return e && hasParams(e.t) ? { ...e } : null
   }
-  if (tool.value === 'spring' || tool.value === 'spikes' || tool.value === 'laser' || tool.value === 'hammer' || tool.value === 'saw' || tool.value === 'mover') {
+  if (tool.value === 'spring' || tool.value === 'spikes' || tool.value === 'laser' || tool.value === 'hammer' || tool.value === 'saw' || tool.value === 'mover' || tool.value === 'crusher') {
     // Kopie, damit Vue nach jeder Änderung neu rendert (die Pinsel-Vorlage ist nicht reaktiv)
     return { ...c.brush[tool.value] }
   }
@@ -181,6 +188,7 @@ const ls = computed(() => pick(target.value, 'laser'))
 const hm = computed(() => pick(target.value, 'hammer'))
 const sw = computed(() => pick(target.value, 'saw'))
 const mv = computed(() => pick(target.value, 'mover'))
+const cr = computed(() => pick(target.value, 'crusher'))
 
 const tileKind = computed(() => (void uiVersion.value, ctrl.value?.brush.tile ?? '#'))
 function pickTileKind(ch: TileChar): void {
@@ -192,6 +200,11 @@ function swatchStyle(ch: TileChar): Record<string, string> {
   const t = props.theme
   if (ch === 'X' || ch === 'O') {
     return { background: ch === 'X' ? t.help : t.help2, borderColor: t.outline }
+  }
+  if (ch === 'v' || ch === '{' || ch === '}') {
+    // Platte auf der geschlossenen Seite, wie im Spiel
+    const side = ch === 'v' ? 'to top' : ch === '{' ? 'to right' : 'to left'
+    return { background: `linear-gradient(${side}, ${t.solidTop} 0 35%, transparent 35%)`, borderColor: t.outline }
   }
   const color = ch === 'I' ? t.ice : ch === 'B' ? t.brittle : ch === '=' ? t.solidTop : t.solid
   const top = ch === 'I' ? t.iceTop : ch === 'B' ? t.brittleTop : t.solidTop
@@ -230,7 +243,7 @@ function apply(patch: Record<string, unknown>): void {
   if (tool.value === 'select') {
     c.updateSelected(patch)
   } else {
-    const t = tool.value as 'spring' | 'spikes' | 'laser' | 'hammer' | 'saw' | 'mover'
+    const t = tool.value as 'spring' | 'spikes' | 'laser' | 'hammer' | 'saw' | 'mover' | 'crusher'
     Object.assign(c.brush[t], patch)
     bump()
   }
@@ -487,6 +500,10 @@ onBeforeUnmount(() => {
                 <i class="sw" :class="{ belt: o.ch === '<' || o.ch === '>' }" :style="swatchStyle(o.ch)">
                   <template v-if="o.ch === '<'">◀</template>
                   <template v-else-if="o.ch === '>'">▶</template>
+                  <template v-else-if="o.ch === 'v'">▼</template>
+                  <template v-else-if="o.ch === '{'">◀</template>
+                  <template v-else-if="o.ch === '}'">▶</template>
+                  <template v-else-if="o.ch === '='">▲</template>
                 </i>
                 {{ o.label }}
               </button>
@@ -727,6 +744,48 @@ onBeforeUnmount(() => {
               <span class="lbl">Offset</span>
               <div class="seg">
                 <button v-for="q in PHASE_QUARTERS" :key="q" type="button" :class="{ on: hammerPhaseQuarter(mv) === q }" @click="apply(hammerPhasePatch(q))">{{ PHASE_LABELS[q] }}</button>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="cr">
+            <div class="grp">
+              <span class="lbl">Direction</span>
+              <div class="seg">
+                <button
+                  v-for="d in DIRS"
+                  :key="d.dir"
+                  type="button"
+                  :class="{ on: cr.dir === d.dir }"
+                  :title="'slams ' + d.label"
+                  @click="apply({ dir: d.dir })"
+                >
+                  {{ ARROW[d.dir] }}
+                </button>
+              </div>
+            </div>
+            <div class="grp">
+              <span class="lbl">Size</span>
+              <div class="seg">
+                <button v-for="n in CRUSHER_SIZES" :key="n" type="button" :class="{ on: cr.size === n }" @click="apply({ size: n })">{{ n }}</button>
+              </div>
+            </div>
+            <div class="grp">
+              <span class="lbl">Reach</span>
+              <div class="seg">
+                <button v-for="n in CRUSHER_REACHES" :key="n" type="button" :class="{ on: cr.len === n }" @click="apply({ len: n })">{{ n }}</button>
+              </div>
+            </div>
+            <div class="grp">
+              <span class="lbl">Speed</span>
+              <div class="seg">
+                <button v-for="(s, i) in CRUSHER_SPEEDS" :key="s.label" type="button" :class="{ on: crusherSpeedIndex(cr) === i }" @click="apply({ period: s.period })">{{ s.label }}</button>
+              </div>
+            </div>
+            <div class="grp">
+              <span class="lbl">Offset</span>
+              <div class="seg">
+                <button v-for="q in PHASE_QUARTERS" :key="q" type="button" :class="{ on: hammerPhaseQuarter(cr) === q }" @click="apply(hammerPhasePatch(q))">{{ PHASE_LABELS[q] }}</button>
               </div>
             </div>
           </template>

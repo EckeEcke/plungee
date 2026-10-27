@@ -28,7 +28,7 @@ function run(w: World, input: InputDir, ticks: number): void {
 
 describe('Block-Typen: Format', () => {
   it('alle Zeichen sind gültig, unbekannte nicht', () => {
-    for (const k of ['#', 'I', '<', '>', 'B', '=', 'X', 'O'] as const) expect(validateLevel(floorLevel(k))).toEqual([])
+    for (const k of ['#', 'I', '<', '>', 'B', '=', 'X', 'O', 'v', '{', '}'] as const) expect(validateLevel(floorLevel(k))).toEqual([])
     const bad = floorLevel('#')
     bad.tiles[3] = '?' + bad.tiles[3].slice(1)
     expect(validateLevel(bad).join()).toContain('Row 3')

@@ -13,6 +13,7 @@ import {
   ACCEL_AIR,
   BELT_SPEED,
   CRUMBLE_DELAY,
+  CRUSHER_HIT_INSET,
   CRUMBLE_REGROW,
   ICE_ACCEL,
   SPRING_SIDE_LIFT,
@@ -32,13 +33,13 @@ import {
   TILE,
   VOID_MARGIN,
 } from './constants'
-import { hammerState, laserPhase, sawPos } from './hazards'
-import type { CompiledLevel } from './level'
-import { blinkSolid, isBlinkKind, K_BELT_L, K_BELT_R, K_BRITTLE, K_ICE, K_ONEWAY } from './tiles'
+import { crusherState, hammerState, laserPhase, sawPos } from './hazards'
+import type { CompiledCrusher, CompiledLevel } from './level'
+import { blinkSolid, isBlinkKind, K_BELT_L, K_BELT_R, K_BRITTLE, K_GATE_D, K_GATE_L, K_GATE_R, K_ICE, K_ONEWAY } from './tiles'
 import { approach, clamp } from './mathx'
 import type { InputDir, Rect } from './types'
 
-export type DeathCause = 'spikes' | 'laser' | 'saw' | 'void'
+export type DeathCause = 'spikes' | 'laser' | 'saw' | 'crusher' | 'void'
 
 export type SimEvent =
   | { type: 'death'; x: number; y: number; cause: DeathCause }
@@ -265,6 +266,13 @@ export class World {
       }
     }
 
+    for (const c of lv.crushers) {
+      if (this.crusherHits(c, now)) {
+        this.kill('crusher')
+        return
+      }
+    }
+
     for (let i = 0; i < lv.hammers.length; i++) {
       const h = lv.hammers[i]
       const s = hammerState(h, now)
@@ -324,6 +332,34 @@ export class World {
         this.emit({ type: 'checkpoint', index: i })
       }
     }
+  }
+
+  /** Position des Quetschers (linke obere Ecke) zu einem Tick */
+  crusherPos(index: number, tick: number): { x: number; y: number } {
+    const c = this.level.crushers[index]
+    const f = crusherState(c, tick).f
+    return { x: c.x0 + c.dx * f, y: c.y0 + c.dy * f }
+  }
+
+  /**
+   * Trifft der Quetscher den Spieler? Geprüft wird die Fläche, die er seit dem letzten Tick überstrichen hat,
+   * damit ein schneller Schlag den Spieler nicht überspringt.
+   */
+  private crusherHits(c: CompiledCrusher, now: number): boolean {
+    const p = this.p
+    const a = crusherState(c, now - 1).f
+    const b = crusherState(c, now).f
+    const size = c.size * TILE
+    const ax = c.x0 + c.dx * a
+    const ay = c.y0 + c.dy * a
+    const bx = c.x0 + c.dx * b
+    const by = c.y0 + c.dy * b
+    const inset = CRUSHER_HIT_INSET
+    const x0 = Math.min(ax, bx) + inset
+    const y0 = Math.min(ay, by) + inset
+    const x1 = Math.max(ax, bx) + size - inset
+    const y1 = Math.max(ay, by) + size - inset
+    return p.x < x1 && p.x + PLAYER_W > x0 && p.y < y1 && p.y + PLAYER_H > y0
   }
 
   // --- Kollision gegen das Tile-Raster ---------------------------------------
@@ -493,19 +529,22 @@ export class World {
     while (remaining !== 0) {
       const step = Math.abs(remaining) > MAX_STEP ? (remaining > 0 ? MAX_STEP : -MAX_STEP) : remaining
       remaining -= step
+      const before = p.x
       p.x += step
       const top = Math.floor(p.y / TILE)
       const bottom = Math.floor((p.y + PLAYER_H - EPS) / TILE)
       if (step > 0) {
         const c = Math.floor((p.x + PLAYER_W - EPS) / TILE)
-        if (this.solidInRows(c, top, bottom)) {
+        // Tor nach links offen: von links kommend ist es dicht
+        if (this.solidInRows(c, top, bottom) || this.gateInRows(c, top, bottom, K_GATE_L, before + PLAYER_W <= c * TILE + EPS)) {
           p.x = c * TILE - PLAYER_W
           p.vx = 0
           return
         }
       } else {
         const c = Math.floor(p.x / TILE)
-        if (this.solidInRows(c, top, bottom)) {
+        // Tor nach rechts offen: von rechts kommend ist es dicht
+        if (this.solidInRows(c, top, bottom) || this.gateInRows(c, top, bottom, K_GATE_R, before >= (c + 1) * TILE - EPS)) {
           p.x = (c + 1) * TILE
           p.vx = 0
           return
@@ -520,6 +559,7 @@ export class World {
     while (remaining !== 0) {
       const step = Math.abs(remaining) > MAX_STEP ? (remaining > 0 ? MAX_STEP : -MAX_STEP) : remaining
       remaining -= step
+      const beforeY = p.y
       p.y += step
       const left = Math.floor(p.x / TILE)
       const right = Math.floor((p.x + PLAYER_W - EPS) / TILE)
@@ -534,7 +574,8 @@ export class World {
         }
       } else {
         const r = Math.floor(p.y / TILE)
-        if (this.solidInCols(r, left, right)) {
+        // Tor nach unten offen: von unten kommend ist es dicht
+        if (this.solidInCols(r, left, right) || this.gateInCols(r, left, right, K_GATE_D, beforeY >= (r + 1) * TILE - EPS)) {
           p.y = (r + 1) * TILE
           p.vy = 0
           return
@@ -548,11 +589,31 @@ export class World {
     return false
   }
 
+  /** Einwegplattform: trägt nur von oben, wenn der Spieler vorher über ihrer Oberkante war */
   private oneWayInCols(row: number, left: number, right: number, prevBottom: number): boolean {
     const lv = this.level
     if (row < 0 || row >= lv.rows || prevBottom > row * TILE + EPS) return false
     for (let c = left; c <= right; c++) {
       if (c >= 0 && c < lv.cols && lv.kind[row * lv.cols + c] === K_ONEWAY) return true
+    }
+    return false
+  }
+
+  /** Torblock des Typs kind in der Spalte? Nur dicht, wenn der Spieler von der geschlossenen Seite kommt (fromClosedSide). */
+  private gateInRows(col: number, top: number, bottom: number, kind: number, fromClosedSide: boolean): boolean {
+    const lv = this.level
+    if (!fromClosedSide || col < 0 || col >= lv.cols) return false
+    for (let r = Math.max(0, top); r <= bottom && r < lv.rows; r++) {
+      if (lv.kind[r * lv.cols + col] === kind) return true
+    }
+    return false
+  }
+
+  private gateInCols(row: number, left: number, right: number, kind: number, fromClosedSide: boolean): boolean {
+    const lv = this.level
+    if (!fromClosedSide || row < 0 || row >= lv.rows) return false
+    for (let c = Math.max(0, left); c <= right && c < lv.cols; c++) {
+      if (lv.kind[row * lv.cols + c] === kind) return true
     }
     return false
   }

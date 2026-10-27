@@ -13,6 +13,7 @@ export type ToolId =
   | 'hammer'
   | 'saw'
   | 'mover'
+  | 'crusher'
   | 'select'
 
 export const TOOLS: Array<{ id: ToolId; label: string }> = [
@@ -25,6 +26,7 @@ export const TOOLS: Array<{ id: ToolId; label: string }> = [
   { id: 'hammer', label: 'Hammer' },
   { id: 'saw', label: 'Saw' },
   { id: 'mover', label: 'Mover' },
+  { id: 'crusher', label: 'Crusher' },
   { id: 'checkpoint', label: 'Checkpoint' },
   { id: 'spawn', label: 'Start' },
   { id: 'goal', label: 'Goal' },
@@ -37,7 +39,10 @@ export const TILE_OPTIONS: Array<{ ch: TileChar; label: string }> = [
   { ch: '<', label: 'Belt ◀' },
   { ch: '>', label: 'Belt ▶' },
   { ch: 'B', label: 'Brittle' },
-  { ch: '=', label: 'One-way' },
+  { ch: '=', label: 'Gate ▲' },
+  { ch: 'v', label: 'Gate ▼' },
+  { ch: '{', label: 'Gate ◀' },
+  { ch: '}', label: 'Gate ▶' },
   { ch: 'X', label: 'Blink ◆' },
   { ch: 'O', label: 'Blink ●' },
 ]
@@ -48,7 +53,10 @@ export const TILE_HINTS: Record<TileChar, string> = {
   '<': 'Conveyor belt: pushes the player left.',
   '>': 'Conveyor belt: pushes the player right.',
   B: 'Crumbles shortly after you step on it and regrows after a few seconds.',
-  '=': 'One-way platform: passable from below, solid from above.',
+  '=': 'Gate ▲: you can pass upwards. From above it is solid, so you can stand on it.',
+  v: 'Gate ▼: you can fall through it, but cannot jump up through it from below.',
+  '{': 'Gate ◀: you can walk through it to the left, but not from the left side.',
+  '}': 'Gate ▶: you can walk through it to the right, but not from the right side.',
   X: 'Blink block ◆: solid for 1.5 s, then gone for 1.5 s. Flickers shortly before it vanishes. Opposite of ●.',
   O: 'Blink block ●: gone while ◆ is solid, and the other way round. Lasers shine through both.',
 }
@@ -79,6 +87,15 @@ export const MOVER_SPEEDS = [
   { label: 'slow', period: 280 },
 ] as const
 
+export const CRUSHER_SPEEDS = [
+  { label: 'fast', period: 100 },
+  { label: 'medium', period: 150 },
+  { label: 'slow', period: 220 },
+] as const
+
+export const CRUSHER_SIZES = [1, 2, 3] as const
+export const CRUSHER_REACHES = [1, 2, 3, 4, 6, 8, 12] as const
+
 export const MOVER_LENGTHS = [2, 3, 4, 6, 8, 12] as const
 export const MOVER_WIDTHS = [1, 2, 3, 4] as const
 
@@ -102,6 +119,7 @@ export interface Brush {
   hammer: Of<'hammer'>
   saw: Of<'saw'>
   mover: Of<'mover'>
+  crusher: Of<'crusher'>
   /** Block-Typ für das Werkzeug "Block" */
   tile: TileChar
 }
@@ -114,6 +132,7 @@ export function defaultBrush(): Brush {
     hammer: { t: 'hammer', x: 0, y: 0, len: 3, amp: 60, period: 130, phase: 0 },
     saw: { t: 'saw', x: 0, y: 0, axis: 'h', len: 4, period: 150, phase: 0 },
     mover: { t: 'mover', x: 0, y: 0, axis: 'h', len: 4, w: 2, period: 180, phase: 0 },
+    crusher: { t: 'crusher', x: 0, y: 0, dir: 'd', size: 2, len: 3, period: 150, phase: 0 },
     tile: '#',
   }
 }
@@ -139,6 +158,8 @@ export function makeEntity(tool: ToolId, c: number, r: number, brush: Brush): En
       return { ...brush.saw, x: c, y: r }
     case 'mover':
       return { ...brush.mover, x: c, y: r }
+    case 'crusher':
+      return { ...brush.crusher, x: c, y: r }
     default:
       return null
   }
@@ -146,7 +167,7 @@ export function makeEntity(tool: ToolId, c: number, r: number, brush: Brush): En
 
 /** Welche Objekttypen haben einstellbare Parameter? */
 export function hasParams(t: EntityData['t']): boolean {
-  return t === 'spring' || t === 'spikes' || t === 'laser' || t === 'hammer' || t === 'saw' || t === 'mover'
+  return t === 'spring' || t === 'spikes' || t === 'laser' || t === 'hammer' || t === 'saw' || t === 'mover' || t === 'crusher'
 }
 
 export function laserSpeedIndex(e: { period: number; on: number }): number {
@@ -174,6 +195,10 @@ export function sawSpeedIndex(e: { period: number }): number {
 
 export function moverSpeedIndex(e: { period: number }): number {
   return MOVER_SPEEDS.findIndex((s) => s.period === e.period)
+}
+
+export function crusherSpeedIndex(e: { period: number }): number {
+  return CRUSHER_SPEEDS.findIndex((s) => s.period === e.period)
 }
 
 export function hammerSpeedIndex(e: { period: number }): number {

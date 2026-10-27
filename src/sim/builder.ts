@@ -22,7 +22,7 @@ export class LevelBuilder {
 
   /**
    * Waagerechte Plattform, c0..c1 inklusive. kind: '#' Block (Standard), 'I' Eis,
-   * '<' / '>' Förderband, 'B' brüchig, '=' Einweg.
+   * '<' / '>' Förderband, 'B' brüchig, '=' Einweg, 'v' / '{' / '}' Torblock (nach unten / links / rechts offen).
    */
   plat(row: number, c0: number, c1: number, kind: TileChar = '#'): this {
     for (let c = c0; c <= c1; c++) this.grid[row][c] = kind
@@ -123,6 +123,27 @@ export class LevelBuilder {
       len,
       w: opts.w ?? 2,
       period: opts.period ?? 180,
+      phase: opts.phase ?? 0,
+    })
+    return this
+  }
+
+  /** Quetscher: Ruhelage links oben in (col,row), schlägt len Tiles in Richtung dir (Standard: nach unten) */
+  crusher(
+    col: number,
+    row: number,
+    dir: Dir = 'd',
+    len = 3,
+    opts: { size?: 1 | 2 | 3; period?: number; phase?: number } = {},
+  ): this {
+    this.entities.push({
+      t: 'crusher',
+      x: col,
+      y: row,
+      dir,
+      size: opts.size ?? 2,
+      len,
+      period: opts.period ?? 150,
       phase: opts.phase ?? 0,
     })
     return this

@@ -53,6 +53,12 @@ defineProps<{ tool: ToolId }>()
       <rect x="6" y="9" width="12" height="5" rx="2" fill="currentColor" />
       <path d="M3 18 H21" stroke-dasharray="2 3" />
     </template>
+    <template v-else-if="tool === 'crusher'">
+      <rect x="6" y="3" width="12" height="12" rx="3.5" fill="currentColor" />
+      <circle cx="10" cy="8.5" r="1.3" fill="var(--panel, #fff)" stroke="none" />
+      <circle cx="14" cy="8.5" r="1.3" fill="var(--panel, #fff)" stroke="none" />
+      <path d="M4 19 H20" stroke-dasharray="2 3" />
+    </template>
     <template v-else-if="tool === 'checkpoint'">
       <path d="M7 21 V4" />
       <path d="M7 5 L19 9 L7 13 Z" fill="currentColor" />

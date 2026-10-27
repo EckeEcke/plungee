@@ -6,6 +6,9 @@ import {
   K_BLINK_A,
   K_BRITTLE,
   K_EMPTY,
+  K_GATE_D,
+  K_GATE_L,
+  K_GATE_R,
   K_ICE,
   K_ONEWAY,
   LEVEL_WIDTH,
@@ -19,9 +22,11 @@ import {
   TERMINAL_VY,
   TILE,
   clamp,
+  crusherState,
   hammerState,
   laserPhase,
   sawPos,
+  type CompiledCrusher,
   type CompiledHammer,
   type CompiledSaw,
   type CompiledLaser,
@@ -116,6 +121,8 @@ export class Renderer {
   private shake = 0
   private time = 0
   private springAnim: number[] = []
+  /** Letzter Tick, für den Quetscher-Aufschläge schon verarbeitet wurden */
+  private crusherTick = -1
   private checkpointAnim: number[] = []
   readonly particles = new Particles()
 
@@ -132,6 +139,7 @@ export class Renderer {
   setLevel(level: CompiledLevel): void {
     this.level = level
     this.springAnim = level.springs.map(() => 0)
+    this.crusherTick = -1
     this.checkpointAnim = level.checkpoints.map(() => 0)
     this.reset()
   }
@@ -314,6 +322,7 @@ export class Renderer {
       this.checkpointAnim[i] = Math.max(0, this.checkpointAnim[i] - dt * 2)
     }
     this.particles.update(dt)
+    this.crusherImpacts(world)
 
     const maxCam = this.maxCamY()
     if (this.freeCamera) {
@@ -329,6 +338,35 @@ export class Renderer {
       this.snap = false
     } else {
       this.camY += (t - this.camY) * (1 - Math.exp(-dt * 9))
+    }
+  }
+
+  /** Staub und Wackeln, wenn ein Quetscher im Bild aufschlägt (nur Darstellung, die Sim kennt keine Kamera) */
+  private crusherImpacts(world: World): void {
+    const lv = this.level
+    const prev = this.crusherTick
+    this.crusherTick = world.tick
+    if (prev < 0 || world.tick <= prev || world.tick - prev > 4) return
+    const th = this.theme
+    for (let i = 0; i < lv.crushers.length; i++) {
+      const c = lv.crushers[i]
+      if (crusherState(c, world.tick).f < 1 || crusherState(c, prev).f >= 1) continue
+      const s = c.size * TILE
+      const cx = c.x0 + c.dx + s / 2
+      const cy = c.y0 + c.dy + s / 2
+      if (cy < this.camY - 48 || cy > this.camY + this.viewH + 48) continue
+      const vx = c.dir === 'l' ? -1 : c.dir === 'r' ? 1 : 0
+      const vy = c.dir === 'u' ? -1 : c.dir === 'd' ? 1 : 0
+      this.particles.burst(cx + vx * s * 0.5, cy + vy * s * 0.5, 8 + c.size * 2, {
+        colors: [th.solidTop, th.solidShade, '#ffffff'],
+        speed: 90,
+        life: 0.45,
+        size: 1.7,
+        gravity: 120,
+        angle: Math.atan2(-vy, -vx),
+        spread: Math.PI * 0.9,
+      })
+      this.shake = Math.max(this.shake, 2.5 + c.size)
     }
   }
 
@@ -371,6 +409,8 @@ export class Renderer {
     for (const sw of lv.saws) this.drawSaw(ctx, sw, t)
     for (const m of lv.movers) this.drawMover(ctx, m, running ? world.tick - 1 + alpha : world.tick)
     for (const hm of lv.hammers) this.drawHammer(ctx, hm, t)
+    const ct = running ? world.tick - 1 + alpha : world.tick
+    for (const c of lv.crushers) this.drawCrusher(ctx, c, ct, world)
     this.drawSpeedlines(ctx, world)
     this.drawPlayer(ctx, world, alpha)
     this.particles.draw(ctx)
@@ -473,6 +513,10 @@ export class Renderer {
           this.drawOneWay(ctx, c, r)
           continue
         }
+        if (k === K_GATE_D || k === K_GATE_L || k === K_GATE_R) {
+          this.drawGate(ctx, c, r, k)
+          continue
+        }
         if (k === K_BRITTLE) {
           this.drawBrittle(ctx, world, c, r)
           continue
@@ -571,6 +615,57 @@ export class Renderer {
       ctx.arc(x + dx, y + 3.5, 0.9, 0, TAU)
       ctx.fill()
     }
+    ctx.restore()
+  }
+
+  /**
+   * Torblock nach unten, links oder rechts offen: dünne Platte auf der geschlossenen Seite (dort kommt man nicht
+   * durch), dazu Pfeile in Durchgangsrichtung. Gleicher Stil wie die Einwegplatte (nach oben offen).
+   */
+  private drawGate(ctx: CanvasRenderingContext2D, c: number, r: number, k: number): void {
+    const th = this.theme
+    const x = c * TILE
+    const y = r * TILE
+    // Richtung, in die man hindurch darf, als Einheitsvektor
+    const dx = k === K_GATE_L ? -1 : k === K_GATE_R ? 1 : 0
+    const dy = k === K_GATE_D ? 1 : 0
+    ctx.save()
+    ctx.fillStyle = th.solidTop
+    ctx.strokeStyle = th.outline
+    ctx.lineWidth = 1.4
+    const plate = (px: number, py: number, w: number, h: number): void => {
+      rr(ctx, px, py, w, h, 2.5, 2.5, 2.5, 2.5)
+      ctx.fill()
+      ctx.stroke()
+    }
+    // Platte sitzt auf der Seite, von der man NICHT hineinkommt (gegen die Durchgangsrichtung versetzt: dort ist es zu)
+    if (dy === 1) plate(x, y + TILE - 6, TILE, 5)
+    else if (dx === -1) plate(x + 1, y, 5, TILE)
+    else plate(x + TILE - 6, y, 5, TILE)
+    ctx.fillStyle = th.solidShade
+    for (const o of [3, 8, 13]) {
+      ctx.beginPath()
+      if (dy === 1) ctx.arc(x + o, y + TILE - 3.5, 0.9, 0, TAU)
+      else ctx.arc(dx === -1 ? x + 3.5 : x + TILE - 3.5, y + o, 0.9, 0, TAU)
+      ctx.fill()
+    }
+    // Pfeile in Durchgangsrichtung
+    ctx.strokeStyle = th.help2
+    ctx.lineWidth = 1.8
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    const mx = dy === 1 ? x + TILE / 2 : x + TILE / 2 + (dx === -1 ? 1.5 : -1.5)
+    const my = dy === 1 ? y + 6.5 : y + TILE / 2
+    for (const off of [0, 3.6]) {
+      const cx = mx + dx * off
+      const cy = my + dy * off
+      // Spitze zeigt in (dx, dy); die Schenkel gehen senkrecht dazu zurück
+      ctx.moveTo(cx - dx * 2 - dy * 3, cy - dy * 2 - dx * 3)
+      ctx.lineTo(cx + dx * 1, cy + dy * 1)
+      ctx.lineTo(cx - dx * 2 + dy * 3, cy - dy * 2 + dx * 3)
+    }
+    ctx.stroke()
     ctx.restore()
   }
 
@@ -974,6 +1069,102 @@ export class Renderer {
     ctx.lineTo(s.x - 1.4, s.y - 3.8)
     ctx.moveTo(s.x + 6.4, s.y - 6)
     ctx.lineTo(s.x + 1.4, s.y - 3.8)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  /**
+   * Quetscher: Block mit Gesicht wie beim Hammer. Die Bahn ist als blasse Gefahrenzone markiert. Vor dem
+   * Schlag wackelt er und reißt die Augen auf; beim Schlag schaut er nach vorn, sonst dem Spieler nach.
+   */
+  private drawCrusher(ctx: CanvasRenderingContext2D, c: CompiledCrusher, t: number, world: World): void {
+    const th = this.theme
+    const st = crusherState(c, t)
+    const s = c.size * TILE
+    const vx = c.dir === 'l' ? -1 : c.dir === 'r' ? 1 : 0
+    const vy = c.dir === 'u' ? -1 : c.dir === 'd' ? 1 : 0
+
+    ctx.save()
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    // Gefahrenzone: Fläche, die der Block überstreicht
+    const zx = Math.min(c.x0, c.x0 + c.dx)
+    const zy = Math.min(c.y0, c.y0 + c.dy)
+    const zw = s + Math.abs(c.dx)
+    const zh = s + Math.abs(c.dy)
+    ctx.fillStyle = th.danger
+    ctx.globalAlpha = 0.07
+    rr(ctx, zx, zy, zw, zh, 4, 4, 4, 4)
+    ctx.fill()
+    ctx.globalAlpha = 0.28
+    ctx.strokeStyle = th.danger
+    ctx.lineWidth = 1
+    ctx.setLineDash([2, 3])
+    rr(ctx, zx + 0.5, zy + 0.5, zw - 1, zh - 1, 4, 4, 4, 4)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.globalAlpha = 1
+
+    // Wackeln kurz vor dem Schlag, quer zur Schlagrichtung
+    const shake = st.warn ? Math.sin(t * 2.2) * 0.9 : 0
+    const x = c.x0 + c.dx * st.f + (vy !== 0 ? shake : 0)
+    const y = c.y0 + c.dy * st.f + (vx !== 0 ? shake : 0)
+    const R = Math.min(6, s * 0.28)
+
+    ctx.fillStyle = th.danger
+    ctx.strokeStyle = th.outline
+    ctx.lineWidth = 1.8
+    rr(ctx, x + 0.9, y + 0.9, s - 1.8, s - 1.8, R, R, R, R)
+    ctx.fill()
+    // Schattenband unten, wie beim Spieler
+    ctx.save()
+    rr(ctx, x + 0.9, y + 0.9, s - 1.8, s - 1.8, R, R, R, R)
+    ctx.clip()
+    ctx.fillStyle = th.dangerDark
+    ctx.fillRect(x, y + s - s * 0.22, s, s * 0.22)
+    ctx.restore()
+    rr(ctx, x + 0.9, y + 0.9, s - 1.8, s - 1.8, R, R, R, R)
+    ctx.stroke()
+
+    // Gesicht (Maße vom Hammerkopf, mit der Blockgröße skaliert)
+    const k = s / 24
+    const cx = x + s / 2
+    const cy = y + s / 2
+    let lx = 0
+    let ly = 0
+    if (st.slamming || st.f >= 1) {
+      lx = vx
+      ly = vy
+    } else {
+      const p = world.p
+      const dxp = p.x + PLAYER_W / 2 - cx
+      const dyp = p.y + PLAYER_H / 2 - cy
+      const d = Math.hypot(dxp, dyp)
+      if (d > 1) {
+        lx = dxp / d
+        ly = dyp / d
+      }
+    }
+    const eyeR = (st.warn ? 3.1 : 2.6) * k
+    const pupR = (st.slamming ? 0.9 : st.warn ? 0.9 : 1.2) * k
+    for (const ex of [-3.5, 3.5]) {
+      ctx.fillStyle = th.eyeWhite
+      ctx.beginPath()
+      ctx.arc(cx + ex * k, cy - 1.4 * k, eyeR, 0, TAU)
+      ctx.fill()
+      ctx.fillStyle = th.pupil
+      ctx.beginPath()
+      ctx.arc(cx + ex * k + lx * 0.9 * k, cy - 1.4 * k + ly * 0.9 * k, pupR, 0, TAU)
+      ctx.fill()
+    }
+    ctx.strokeStyle = th.outline
+    ctx.lineWidth = Math.max(1.1, 1.4 * k)
+    ctx.beginPath()
+    ctx.moveTo(cx - 6.4 * k, cy - 6 * k)
+    ctx.lineTo(cx - 1.4 * k, cy - 3.8 * k)
+    ctx.moveTo(cx + 6.4 * k, cy - 6 * k)
+    ctx.lineTo(cx + 1.4 * k, cy - 3.8 * k)
     ctx.stroke()
     ctx.restore()
   }

@@ -1,7 +1,16 @@
 import { DEG_TO_RAD } from './mathx'
-import { isBlinkKind, K_BRITTLE, K_ONEWAY, K_SOLID, kindOfChar, TILE_LINE_RE } from './tiles'
-import { LASER_BEAM_W, LEVEL_COLS, LEVEL_ROWS, MAX_MOVER_LEN, MAX_MOVER_W, MAX_SAW_LEN, TILE } from './constants'
-import type { HammerParams, SawParams } from './hazards'
+import { isBlinkKind, isGateKind, K_BRITTLE, K_SOLID, kindOfChar, TILE_LINE_RE } from './tiles'
+import {
+  LASER_BEAM_W,
+  LEVEL_COLS,
+  LEVEL_ROWS,
+  MAX_CRUSHER_LEN,
+  MAX_MOVER_LEN,
+  MAX_MOVER_W,
+  MAX_SAW_LEN,
+  TILE,
+} from './constants'
+import type { CrusherTiming, HammerParams, SawParams } from './hazards'
 import type { Dir, EntityData, LevelData, Rect } from './types'
 
 export const MAX_ENTITIES = 400
@@ -53,6 +62,20 @@ export interface CompiledMover extends SawParams {
   w: number
 }
 
+export interface CompiledCrusher extends CrusherTiming {
+  col: number
+  row: number
+  dir: Dir
+  size: number
+  len: number
+  /** Ruhelage: linke obere Ecke in Welt-Einheiten */
+  x0: number
+  y0: number
+  /** Verschiebung von der Ruhe- in die Endlage */
+  dx: number
+  dy: number
+}
+
 export interface CompiledCheckpoint {
   col: number
   row: number
@@ -82,6 +105,7 @@ export interface CompiledLevel {
   hammers: CompiledHammer[]
   saws: CompiledSaw[]
   movers: CompiledMover[]
+  crushers: CompiledCrusher[]
 }
 
 const DIRS: Dir[] = ['u', 'd', 'l', 'r']
@@ -109,7 +133,7 @@ export function validateLevel(data: LevelData): string[] {
   for (let r = 0; r < rows; r++) {
     const line = data.tiles[r]
     if (typeof line !== 'string' || line.length !== LEVEL_COLS || TILE_LINE_RE.test(line)) {
-      errors.push(`Row ${r}: expected ${LEVEL_COLS} characters from . # I < > B = X O`)
+      errors.push(`Row ${r}: expected ${LEVEL_COLS} characters from . # I < > B = X O v { }`)
       return errors
     }
   }
@@ -201,12 +225,29 @@ export function validateLevel(data: LevelData): string[] {
         }
         if (!(e.phase >= 0 && e.phase < 1)) errors.push(`${label}: phase 0 to < 1`)
         break
+      case 'crusher': {
+        if (!DIRS.includes(e.dir)) errors.push(`${label}: invalid direction`)
+        if (e.size !== 1 && e.size !== 2 && e.size !== 3) errors.push(`${label}: size 1 to 3 tiles`)
+        if (!isInt(e.len) || e.len < 1 || e.len > MAX_CRUSHER_LEN) {
+          errors.push(`${label}: reach 1 to ${MAX_CRUSHER_LEN} tiles`)
+        } else if (DIRS.includes(e.dir) && (e.size === 1 || e.size === 2 || e.size === 3)) {
+          const end = crusherEnd(e)
+          if (e.x + e.size > LEVEL_COLS || e.y + e.size > rows || end.x < 0 || end.y < 0 || end.x + e.size > LEVEL_COLS || end.y + e.size > rows) {
+            errors.push(`${label}: crusher reaches outside the level`)
+          }
+        }
+        if (!isInt(e.period) || e.period < 60 || e.period > 600) {
+          errors.push(`${label}: period 60 to 600 ticks`)
+        }
+        if (!(e.phase >= 0 && e.phase < 1)) errors.push(`${label}: phase 0 to < 1`)
+        break
+      }
       default:
         errors.push(`Unknown object "${(e as { t: string }).t}"`)
     }
 
     // Hammer-Aufhängungen und Sägen dürfen sich eine Zelle teilen, alles andere nicht.
-    if (e.t !== 'hammer' && e.t !== 'saw' && e.t !== 'mover') {
+    if (e.t !== 'hammer' && e.t !== 'saw' && e.t !== 'mover' && e.t !== 'crusher') {
       const prev = occupied.get(key)
       if (prev) errors.push(`${label}: cell is already occupied by "${prev}"`)
       else occupied.set(key, e.t)
@@ -240,8 +281,8 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
       const k = kindOfChar(data.tiles[r][c])
       const i = r * cols + c
       kind[i] = k
-      // Blinkblöcke blockieren keine Laser; ihre Festigkeit entscheidet die Welt je Tick
-      solid[i] = k !== 0 && k !== K_ONEWAY && !isBlinkKind(k) ? 1 : 0
+      // Blinkblöcke und Torblöcke blockieren keine Laser; ihre Festigkeit entscheidet die Welt je Tick
+      solid[i] = k !== 0 && !isGateKind(k) && !isBlinkKind(k) ? 1 : 0
       if (k === K_BRITTLE) brittle.push(i)
     }
   }
@@ -273,6 +314,7 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
     hammers: [],
     saws: [],
     movers: [],
+    crushers: [],
   }
 
   for (const e of data.entities) {
@@ -372,9 +414,34 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
         })
         break
       }
+      case 'crusher': {
+        const end = crusherEnd(e)
+        level.crushers.push({
+          col: e.x,
+          row: e.y,
+          dir: e.dir,
+          size: e.size,
+          len: e.len,
+          x0: px,
+          y0: py,
+          dx: (end.x - e.x) * TILE,
+          dy: (end.y - e.y) * TILE,
+          period: e.period,
+          phase: e.phase,
+        })
+        break
+      }
     }
   }
   return level
+}
+
+/** Zelle der Endlage (links oben) eines Quetschers */
+export function crusherEnd(e: { x: number; y: number; dir: Dir; len: number }): { x: number; y: number } {
+  return {
+    x: e.x + (e.dir === 'l' ? -e.len : e.dir === 'r' ? e.len : 0),
+    y: e.y + (e.dir === 'u' ? -e.len : e.dir === 'd' ? e.len : 0),
+  }
 }
 
 function spikeRect(px: number, py: number, dir: Dir): Rect {

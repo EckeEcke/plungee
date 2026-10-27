@@ -5,6 +5,8 @@ import {
   TILE_CHARS,
   MAX_SAW_LEN,
   MAX_MOVER_LEN,
+  MAX_CRUSHER_LEN,
+  MAX_CRUSHER_SIZE,
   validateLevel,
   type EntityData,
   type TileChar,
@@ -128,7 +130,12 @@ export class EditorDoc {
       if (!isOverlay(e.t)) return e
       overlay = e
     }
-    return overlay
+    if (overlay) return overlay
+    // Ein großer Quetscher ist auch in seinen anderen Zellen anklickbar
+    for (const e of this.entities) {
+      if (e.t === 'crusher' && c >= e.x && c < e.x + e.size && r >= e.y && r < e.y + e.size) return e
+    }
+    return null
   }
 
   // --- Änderungen ------------------------------------------------------------
@@ -232,6 +239,11 @@ export class EditorDoc {
         fitMover(e, this.rows)
         if (`${e.len},${e.w}` !== before) changed = true
       }
+      if (e.t === 'crusher') {
+        const before = `${e.len},${e.size}`
+        fitCrusher(e, this.rows)
+        if (`${e.len},${e.size}` !== before) changed = true
+      }
       return changed
     })
   }
@@ -260,7 +272,7 @@ export class EditorDoc {
       const next = emptyTiles(rows)
       for (let r = 0; r < Math.min(rows, this.rows); r++) next[r] = [...this.tiles[r]]
       this.tiles = next
-      this.entities = this.entities.filter((e) => e.y < rows && (e.t !== 'saw' || fitSaw(e, rows)) && (e.t !== 'mover' || fitMover(e, rows)))
+      this.entities = this.entities.filter((e) => e.y < rows && (e.t !== 'saw' || fitSaw(e, rows)) && (e.t !== 'mover' || fitMover(e, rows)) && (e.t !== 'crusher' || fitCrusher(e, rows)))
       this.size = size
       return true
     })
@@ -332,10 +344,11 @@ export class EditorDoc {
   // --- intern ----------------------------------------------------------------
 
   private placeInternal(e: EntityData): boolean {
-    const free = e.t === 'hammer' || e.t === 'laser' || e.t === 'saw' || e.t === 'mover'
+    const free = e.t === 'hammer' || e.t === 'laser' || e.t === 'saw' || e.t === 'mover' || e.t === 'crusher'
     if (!free && this.tiles[e.y][e.x] !== '.') return false
     if (e.t === 'saw' && !fitSaw(e, this.rows)) return false
     if (e.t === 'mover' && !fitMover(e, this.rows)) return false
+    if (e.t === 'crusher' && !fitCrusher(e, this.rows)) return false
 
     let next = this.entities
     if (e.t === 'spawn' || e.t === 'goal') next = next.filter((x) => x.t !== e.t)
@@ -413,7 +426,7 @@ function parseTiles(lines: string[], rows: number): string[][] {
 
 /** Objekte, die in einer Zelle neben einem normalen Objekt liegen dürfen */
 function isOverlay(t: EntityData['t']): boolean {
-  return t === 'hammer' || t === 'saw' || t === 'mover'
+  return t === 'hammer' || t === 'saw' || t === 'mover' || t === 'crusher'
 }
 
 /** Kürzt die Bahn einer Säge, bis sie ins Level passt. false, wenn nicht einmal ein Tile Platz hat. */
@@ -429,6 +442,32 @@ function fitMover(e: Extract<EntityData, { t: 'mover' }>, rows: number): boolean
   const room = e.axis === 'h' ? LEVEL_COLS - e.x - e.w : rows - 1 - e.y
   e.len = Math.min(e.len, room, MAX_MOVER_LEN)
   return e.len >= 1
+}
+
+/**
+ * Passt Größe und Reichweite eines Quetschers ins Level: erst muss die Ruhelage hineinpassen, dann wird die
+ * Reichweite bis zum Levelrand gekürzt. false, wenn nicht einmal ein Tile Reichweite übrig bleibt.
+ */
+export function fitCrusherParams(
+  x: number,
+  y: number,
+  size: number,
+  dir: 'u' | 'd' | 'l' | 'r',
+  len: number,
+  rows: number,
+): { size: 1 | 2 | 3; len: number } | null {
+  const s = Math.max(1, Math.min(size, MAX_CRUSHER_SIZE, LEVEL_COLS - x, rows - y)) as 1 | 2 | 3
+  const room = dir === 'd' ? rows - (y + s) : dir === 'u' ? y : dir === 'l' ? x : LEVEL_COLS - (x + s)
+  const l = Math.min(len, room, MAX_CRUSHER_LEN)
+  return l >= 1 ? { size: s, len: l } : null
+}
+
+function fitCrusher(e: Extract<EntityData, { t: 'crusher' }>, rows: number): boolean {
+  const f = fitCrusherParams(e.x, e.y, e.size, e.dir, e.len, rows)
+  if (!f) return false
+  e.size = f.size
+  e.len = f.len
+  return true
 }
 
 function sanitizeEntities(list: EntityData[], rows: number): EntityData[] {

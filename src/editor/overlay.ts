@@ -1,5 +1,6 @@
 import type { Theme } from '../game/theme'
 import { LEVEL_COLS, LEVEL_WIDTH, TILE, type Dir } from '../sim'
+import { fitCrusherParams } from './doc'
 import type { Brush, ToolId } from './brush'
 import type { EditorDoc, EntityKey } from './doc'
 
@@ -20,9 +21,9 @@ export interface OverlayState {
   time: number
 }
 
-const OBJECT_TOOLS: ToolId[] = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw', 'mover']
+const OBJECT_TOOLS: ToolId[] = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw', 'mover', 'crusher']
 /** Diese Objekte dürfen auch auf festen Wänden stehen */
-const WALL_OK: ToolId[] = ['laser', 'hammer', 'saw', 'mover']
+const WALL_OK: ToolId[] = ['laser', 'hammer', 'saw', 'mover', 'crusher']
 
 /**
  * Editor-Hilfen über dem Spielbild: Raster, Hammer-Schwungbogen, Vorschau, Auswahl.
@@ -40,6 +41,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, s: OverlayState): voi
   drawHammerArcs(ctx, s)
   drawSawTracks(ctx, s)
   drawMoverTracks(ctx, s)
+  drawCrusherZones(ctx, s)
   if (s.hover) drawGhost(ctx, s, s.hover)
   if (s.selected) drawSelection(ctx, s, s.selected)
 
@@ -223,6 +225,46 @@ function drawMoverTracks(ctx: CanvasRenderingContext2D, s: OverlayState): void {
   }
 }
 
+/** Ruhelage (gestrichelt, kräftig) und überstrichene Fläche eines Quetschers */
+function drawCrusherZone(
+  ctx: CanvasRenderingContext2D,
+  color: string,
+  x: number,
+  y: number,
+  size: number,
+  dir: Dir,
+  len: number,
+  alpha: number,
+  width: number,
+): void {
+  const s = size * TILE
+  const dx = dir === 'l' ? -len * TILE : dir === 'r' ? len * TILE : 0
+  const dy = dir === 'u' ? -len * TILE : dir === 'd' ? len * TILE : 0
+  const px = x * TILE
+  const py = y * TILE
+  ctx.strokeStyle = color
+  ctx.lineWidth = width
+  ctx.setLineDash([2, 3])
+  ctx.globalAlpha = alpha
+  // Endlage
+  ctx.strokeRect(px + dx + 0.5, py + dy + 0.5, s - 1, s - 1)
+  // Mittellinie der Bahn
+  ctx.beginPath()
+  ctx.moveTo(px + s / 2, py + s / 2)
+  ctx.lineTo(px + s / 2 + dx, py + s / 2 + dy)
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.globalAlpha = 1
+}
+
+function drawCrusherZones(ctx: CanvasRenderingContext2D, s: OverlayState): void {
+  for (const e of s.doc.entityList) {
+    if (e.t !== 'crusher') continue
+    const isSel = !!s.selected && s.selected.t === 'crusher' && s.selected.x === e.x && s.selected.y === e.y
+    drawCrusherZone(ctx, s.theme.danger, e.x, e.y, e.size, e.dir, e.len, isSel ? 0.9 : 0.5, isSel ? 1.6 : 1)
+  }
+}
+
 function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): void {
   const th = s.theme
   const x = h.c * TILE
@@ -251,19 +293,22 @@ function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): voi
   if (tool === 'erase') fill = th.danger
   else if (OBJECT_TOOLS.includes(tool)) {
     fill = tool === 'spring' || tool === 'checkpoint' ? th.help : tool === 'goal' ? th.goal : th.player
-    if (tool === 'spikes' || tool === 'laser' || tool === 'hammer' || tool === 'saw') fill = th.danger
+    if (tool === 'spikes' || tool === 'laser' || tool === 'hammer' || tool === 'saw' || tool === 'crusher') fill = th.danger
     if (tool === 'mover') fill = th.help
     blocked = !WALL_OK.includes(tool) && s.doc.isSolid(h.c, h.r)
   }
   if (blocked) fill = th.dangerDark
 
+  // Ein Quetscher belegt size × size Zellen in der Ruhelage
+  const cr = tool === 'crusher' ? fitCrusherParams(h.c, h.r, s.brush.crusher.size, s.brush.crusher.dir, s.brush.crusher.len, s.doc.rows) : null
+  const ghostSize = tool === 'crusher' ? (cr?.size ?? 1) * TILE : TILE
   ctx.globalAlpha = blocked ? 0.28 : 0.42
   ctx.fillStyle = fill
-  ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2)
+  ctx.fillRect(x + 1, y + 1, ghostSize - 2, ghostSize - 2)
   ctx.globalAlpha = 0.9
   ctx.strokeStyle = th.outline
   ctx.lineWidth = 1
-  ctx.strokeRect(x + 0.5, y + 0.5, TILE - 1, TILE - 1)
+  ctx.strokeRect(x + 0.5, y + 0.5, ghostSize - 1, ghostSize - 1)
 
   if (tool === 'erase' || blocked) {
     ctx.beginPath()
@@ -280,6 +325,21 @@ function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): voi
   }
   if (tool === 'tile' && (s.brush.tile === '<' || s.brush.tile === '>')) {
     drawArrow(ctx, x + 8, y + 8, s.brush.tile === '<' ? 'l' : 'r', th.outline)
+  }
+  if (tool === 'crusher') {
+    if (cr) {
+      drawArrow(ctx, x + ghostSize / 2, y + ghostSize / 2, s.brush.crusher.dir, th.outline)
+      drawCrusherZone(ctx, th.danger, h.c, h.r, cr.size, s.brush.crusher.dir, cr.len, 0.6, 1)
+    } else {
+      // Kein Platz in dieser Richtung: wie gesperrt zeichnen
+      ctx.strokeStyle = th.dangerDark
+      ctx.beginPath()
+      ctx.moveTo(x + 4, y + 4)
+      ctx.lineTo(x + TILE - 4, y + TILE - 4)
+      ctx.moveTo(x + TILE - 4, y + 4)
+      ctx.lineTo(x + 4, y + TILE - 4)
+      ctx.stroke()
+    }
   }
   if (tool === 'saw' && !blocked) drawTrack(ctx, th.danger, h.c, h.r, s.brush.saw.axis, s.brush.saw.len, s.doc.rows, 0.55, 1)
   if (tool === 'mover' && !blocked) {
@@ -315,13 +375,15 @@ function drawSelection(ctx: CanvasRenderingContext2D, s: OverlayState, sel: Enti
   if (!s.doc.findEntity(sel.t, sel.x, sel.y)) return
   const x = sel.x * TILE
   const y = sel.y * TILE
+  const ent = s.doc.findEntity(sel.t, sel.x, sel.y)
+  const size = (ent && ent.t === 'crusher' ? ent.size : 1) * TILE
   ctx.lineWidth = 2.4
   ctx.strokeStyle = th.outline
-  ctx.strokeRect(x - 0.5, y - 0.5, TILE + 1, TILE + 1)
+  ctx.strokeRect(x - 0.5, y - 0.5, size + 1, size + 1)
   ctx.lineWidth = 1.3
   ctx.strokeStyle = th.ui.accent
   ctx.setLineDash([3, 2])
   ctx.lineDashOffset = -s.time * 8
-  ctx.strokeRect(x - 0.5, y - 0.5, TILE + 1, TILE + 1)
+  ctx.strokeRect(x - 0.5, y - 0.5, size + 1, size + 1)
   ctx.setLineDash([])
 }

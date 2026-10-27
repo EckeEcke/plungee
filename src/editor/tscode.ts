@@ -27,6 +27,8 @@ function entityCall(e: EntityData): string {
       return `b.saw(${e.x}, ${e.y}, '${e.axis}', ${e.len}, { period: ${e.period}, phase: ${e.phase} })`
     case 'mover':
       return `b.mover(${e.x}, ${e.y}, '${e.axis}', ${e.len}, { w: ${e.w}, period: ${e.period}, phase: ${e.phase} })`
+    case 'crusher':
+      return `b.crusher(${e.x}, ${e.y}, '${e.dir}', ${e.len}, { size: ${e.size}, period: ${e.period}, phase: ${e.phase} })`
     case 'hammer':
       return `b.hammer(${e.x}, ${e.y}, { len: ${e.len}, amp: ${e.amp}, period: ${e.period}, phase: ${e.phase} })`
   }
@@ -63,7 +65,7 @@ export function levelToTs(level: LevelData, fnName = levelFnName(level.title)): 
 
   lines.push('')
   lines.push('  // Objekte')
-  const order = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw', 'mover']
+  const order = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw', 'mover', 'crusher']
   const sorted = [...level.entities].sort(
     (a, b) => order.indexOf(a.t) - order.indexOf(b.t) || a.y - b.y || a.x - b.x,
   )
