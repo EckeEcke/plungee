@@ -11,6 +11,8 @@ export interface OnlineMeta {
   size: string
   createdAt: number
   plays: number
+  /** Wer das Level als Erster geschafft hat (ohne den Ersteller); null, solange es niemand geschafft hat */
+  firstClear?: { name: string; at: number } | null
 }
 
 export interface BoardRow {
@@ -35,11 +37,13 @@ export interface BoardState {
   improved?: boolean
   /** Der Server hat den Namen abgelehnt */
   nameRejected?: boolean
+  /** Der Spieler hat das Level als Erster geschafft */
+  firstClear?: boolean
   board?: Board
 }
 
 /** nameRejected: der Server hat den Namen abgelehnt (die Zeit zählt trotzdem) */
-export type SubmitResult = Board & { ticks: number; improved: boolean; nameRejected?: boolean }
+export type SubmitResult = Board & { ticks: number; improved: boolean; nameRejected?: boolean; firstClear?: boolean }
 export type LevelSort = 'new' | 'plays'
 
 export class OnlineError extends Error {
@@ -222,3 +226,6 @@ export const adminDeleteTime = (token: string, target: string, playerId: string,
 
 export const adminClearName = (token: string, playerId: string) =>
   call<{ cleared: true }>('/admin/name/clear', { body: { playerId }, headers: adminHeaders(token) })
+
+export const adminClearFirstClear = (token: string, id: string) =>
+  call<{ cleared: true }>('/admin/firstclear/clear', { body: { id }, headers: adminHeaders(token) })

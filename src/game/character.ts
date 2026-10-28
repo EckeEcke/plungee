@@ -1,4 +1,4 @@
-import type { Look } from './look'
+import { PATTERN_COLORS, type Look } from './look'
 import type { Theme } from './theme'
 
 /** Zeichnet die Spielfigur. Gemeinsam genutzt vom Spiel (renderer.ts) und von der Vorschau (CharacterCanvas.vue). */
@@ -73,6 +73,61 @@ function eyeSize(style: Look['eyes'], fall: number): { er: number; pr: number } 
   }
 }
 
+function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 === 0 ? r : r * 0.45
+    const a = -Math.PI / 2 + (i * Math.PI) / 5
+    if (i === 0) ctx.moveTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad)
+    else ctx.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad)
+  }
+  ctx.closePath()
+}
+
+function heart(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  ctx.moveTo(cx, cy + 0.9 * s)
+  ctx.bezierCurveTo(cx - 1.15 * s, cy + 0.1 * s, cx - 0.75 * s, cy - 0.95 * s, cx, cy - 0.35 * s)
+  ctx.bezierCurveTo(cx + 0.75 * s, cy - 0.95 * s, cx + 1.15 * s, cy + 0.1 * s, cx, cy + 0.9 * s)
+  ctx.closePath()
+}
+
+/**
+ * Muster auf dem Körper (unter Kontur, Glanz und Augen). Wird auf die Körperform beschnitten, die Kontur deckt den Rand.
+ * Stern, Herz und Punkt sitzen in drei Reihen und lassen die Augenzone weitgehend frei.
+ */
+function drawPattern(ctx: CanvasRenderingContext2D, th: CharacterColors, look: Look): void {
+  if (look.pattern === 'none') return
+  const pc = PATTERN_COLORS.find((c) => c.id === look.patternColor) ?? PATTERN_COLORS[0]
+  ctx.save()
+  roundRect(ctx, -6, -12, 12, 12, 4, 4, 4, 4)
+  ctx.clip()
+  ctx.fillStyle = pc.hex ?? th.outline
+  ctx.beginPath()
+  if (look.pattern === 'stripes') {
+    for (let y = -12 + 1; y < 0; y += 3) ctx.rect(-6, y, 12, 1.4)
+  } else if (look.pattern === 'checks') {
+    // 4 × 4 Felder à 3 Einheiten
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) ctx.rect(-6 + i * 3, -12 + j * 3, 3, 3)
+  } else {
+    // Drei Reihen, die Augenzone (Mitte) bleibt weitgehend frei: oben und unten je drei, dazwischen nur die Ränder
+    const rows: Array<[number, number[]]> = [
+      [-10.4, [-4, 0, 4]],
+      [-6.6, [-6, -2, 2, 6]],
+      [-2.8, [-4, 0, 4]],
+    ]
+    for (const [y, xs] of rows) {
+      for (const x of xs) {
+        if (look.pattern === 'dots') {
+          ctx.moveTo(x + 0.85, y)
+          ctx.arc(x, y, 0.85, 0, TAU)
+        } else if (look.pattern === 'stars') star(ctx, x, y, 1.45)
+        else heart(ctx, x, y, 1.3)
+      }
+    }
+  }
+  ctx.fill()
+  ctx.restore()
+}
+
 /**
  * Ursprung ist die Mitte der Fußlinie, die Figur ist 12 × 12 Einheiten groß (x −6…6, y −12…0).
  * Skalierung (Quetschen/Strecken) und Position setzt der Aufrufer.
@@ -89,6 +144,7 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, th: CharacterColors
   ctx.fillStyle = th.playerShade
   roundRect(ctx, -6, -4, 12, 4, 0, 0, 4, 4)
   ctx.fill()
+  drawPattern(ctx, th, look)
   ctx.strokeStyle = th.outline
   ctx.lineWidth = 1.4
   roundRect(ctx, -6, -12, 12, 12, 4, 4, 4, 4)
@@ -131,6 +187,12 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, th: CharacterColors
       ctx.beginPath()
       ctx.arc(cx, EYE_Y, er, 0, TAU)
       ctx.fill()
+      if (look.pattern !== 'none') {
+        // Dünner Rand, damit die Augen auch auf weißen oder gleichfarbigen Mustern klar zu erkennen sind
+        ctx.strokeStyle = th.outline
+        ctx.lineWidth = 0.45
+        ctx.stroke()
+      }
       ctx.fillStyle = th.pupil
       ctx.beginPath()
       ctx.arc(cx + pose.ox, EYE_Y + pose.oy, pr, 0, TAU)

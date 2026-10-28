@@ -103,7 +103,16 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
           <button class="play" type="button" @click="emit('play', l.id)">
             <span class="t">{{ l.title }}</span>
             <span class="m">by {{ l.author }} · {{ SIZE_TEXT[l.size] ?? l.size }} · {{ ago(l.createdAt) }}</span>
-            <span class="p">▶ {{ l.plays }} {{ l.plays === 1 ? 'play' : 'plays' }}</span>
+            <span class="p">
+              <span>▶ {{ l.plays }} {{ l.plays === 1 ? 'play' : 'plays' }}</span>
+              <span v-if="l.firstClear" class="fc" :title="`First clear by ${l.firstClear.name}`">
+                <svg class="flag" viewBox="0 0 12 14" aria-hidden="true">
+                  <path d="M2 1v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" />
+                  <path d="M2.8 1.6h7.2l-2 2.7 2 2.7H2.8z" fill="currentColor" />
+                </svg>
+                <span class="fc-name">{{ l.firstClear.name }}</span>
+              </span>
+            </span>
           </button>
         </li>
       </ul>
@@ -282,6 +291,33 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   font-size: 17px;
   font-weight: 900;
   color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.p {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--accent);
+}
+
+.flag {
+  flex: none;
+  width: 11px;
+  height: 13px;
+}
+
+.fc-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

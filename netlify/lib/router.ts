@@ -1,3 +1,4 @@
+import { adminClearFirstClear, adminClearName, adminDeleteTime, adminLevels, adminTimes, adminWeeks } from './adminBoards'
 import { ApiError } from './errors'
 import {
   adminLevel,
@@ -85,8 +86,26 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
       case 'POST /admin/review':
         await requireAdmin(ctx, req.headers.get('x-admin-token'))
         return json(await adminReview(ctx, await readBody(req)))
+      case 'GET /admin/levels':
+        await requireAdmin(ctx, req.headers.get('x-admin-token'))
+        return json(await adminLevels(ctx, intParam(url, 'offset', 0), intParam(url, 'limit', 50)))
+      case 'GET /admin/weeks':
+        await requireAdmin(ctx, req.headers.get('x-admin-token'))
+        return json(adminWeeks(ctx))
+      case 'GET /admin/times':
+        await requireAdmin(ctx, req.headers.get('x-admin-token'))
+        return json(await adminTimes(ctx, url.searchParams.get('target')))
+      case 'POST /admin/time/delete':
+        await requireAdmin(ctx, req.headers.get('x-admin-token'))
+        return json(await adminDeleteTime(ctx, await readBody(req)))
+      case 'POST /admin/firstclear/clear':
+        await requireAdmin(ctx, req.headers.get('x-admin-token'))
+        return json(await adminClearFirstClear(ctx, await readBody(req)))
+      case 'POST /admin/name/clear':
+        await requireAdmin(ctx, req.headers.get('x-admin-token'))
+        return json(await adminClearName(ctx, await readBody(req)))
     }
-    const known = ['/weekly', '/weekly/board', '/weekly/time', '/levels', '/start', '/upload', '/time', '/times', '/admin/pending', '/admin/level', '/admin/review']
+    const known = ['/weekly', '/weekly/board', '/weekly/time', '/levels', '/start', '/upload', '/time', '/times', '/admin/pending', '/admin/level', '/admin/review', '/admin/levels', '/admin/weeks', '/admin/times', '/admin/time/delete', '/admin/name/clear', '/admin/firstclear/clear']
     return known.includes(path) ? json({ error: 'Method not allowed' }, 405) : json({ error: 'Not found' }, 404)
   } catch (e) {
     if (e instanceof ApiError) return json({ error: e.message }, e.status)

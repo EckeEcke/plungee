@@ -5,9 +5,9 @@
  */
 export const LEGAL = {
   /** Name des Verantwortlichen */
-  name: '[Full name]',
+  name: 'Christian Eckardt',
   /** Eine E-Mail-Adresse, die du wirklich liest (am besten eine eigene für das Spiel) */
-  email: '[Email address]',
+  email: 'ceckardt254@gmail.com',
   /** Die für dich zuständige Datenschutz-Aufsichtsbehörde (Landesdatenschutzbeauftragte/r deines Bundeslands) */
   authority: '[Competent data protection authority, with address]',
   /** Region der Upstash-Datenbank (steht in der Upstash-Konsole, z. B. "Frankfurt, Deutschland (eu-central-1)") */

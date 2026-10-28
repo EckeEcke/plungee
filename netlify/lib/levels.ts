@@ -9,6 +9,7 @@ import {
   type LevelData,
   type LevelSize,
 } from '../../src/sim'
+import { isNameAllowed } from '../../src/online/nameFilter'
 import type { Db } from './db'
 import { ApiError } from './errors'
 
@@ -22,6 +23,7 @@ import { ApiError } from './errors'
  *   times:{id}          ZSet     Spieler-ID -> Bestzeit in Ticks (kleiner = besser)
  *   name:{playerId}     String   Anzeigename
  *   replay:{id}:{pid}   String   Replay der Bestzeit, nur für die Top-Plätze (LIMITS.topTimes); fällt ein Spieler heraus, wird es gelöscht
+ *   firstclear:{id}     String   JSON {name, at}: erster Spieler (nicht der Ersteller), der das Level geschafft hat; Name als Momentaufnahme
  *   hash:{levelHash}    String   Level-ID (verhindert doppelte Uploads)
  *   seen:{id}:{pid}     String   mit Ablauf: zählt ein Spiel nur einmal pro Spieler und Stunde
  *   rl:{aktion}:{ip}    Zähler   mit Ablauf: Rate-Limit
@@ -37,6 +39,7 @@ export const K = {
   name: (pid: string) => `${P}name:${pid}`,
   replay: (id: string, pid: string) => `${P}replay:${id}:${pid}`,
   hash: (h: string) => `${P}hash:${h}`,
+  firstClear: (id: string) => `${P}firstclear:${id}`,
   seen: (id: string, pid: string) => `${P}seen:${id}:${pid}`,
   rl: (action: string, ip: string) => `${P}rl:${action}:${ip}`,
   // Weekly Challenge (week = Datum des Montags, z. B. 2026-10-26)
@@ -52,6 +55,8 @@ export interface Ctx {
   adminToken: string | undefined
   /** Kampagnen-Level für die Weekly Challenge (Standard: netlify/generated/campaign.json). Nur Tests setzen das. */
   campaign?: ReadonlyArray<{ key: string; title: string; data: LevelData }>
+  /** Zusätzlich gesperrte Wörter für Namen und Titel (Umgebungsvariable BLOCKED_WORDS) */
+  blockedWords?: readonly string[]
 }
 
 export interface LevelMeta {
@@ -63,6 +68,13 @@ export interface LevelMeta {
   hash: string
   simVersion: number
   status: 'pending' | 'approved'
+  /** Spieler-ID des Erstellers (nur intern/Admin; fehlt bei Leveln aus der Zeit davor) */
+  creator?: string
+}
+
+export interface FirstClear {
+  name: string
+  at: number
 }
 
 export const LIMITS = {
@@ -103,6 +115,13 @@ function cleanText(v: unknown, min: number, max: number, what: string): string {
 export function cleanName(v: unknown): string | null {
   if (v === undefined || v === null || v === '') return null
   return cleanText(v, 1, 16, 'Name')
+}
+
+/** Der Name, der gespeichert werden darf. Gesperrte Namen werden verworfen (die Zeit zählt trotzdem), `rejected` meldet das dem Client. */
+export function chosenName(ctx: Ctx, v: unknown): { name: string | null; rejected: boolean } {
+  const name = cleanName(v)
+  if (name && !isNameAllowed(name, ctx.blockedWords)) return { name: null, rejected: true }
+  return { name, rejected: false }
 }
 
 function levelId(v: unknown): string {
@@ -153,8 +172,26 @@ function parseMeta(raw: string | null): LevelMeta | null {
   }
 }
 
-function publicMeta(m: LevelMeta, plays?: number | null) {
-  return { id: m.id, title: m.title, author: m.author, size: m.size, createdAt: m.createdAt, plays: plays ?? 0 }
+export function parseFirstClear(raw: string | null): FirstClear | null {
+  if (!raw) return null
+  try {
+    const v = JSON.parse(raw) as Partial<FirstClear>
+    return typeof v.name === 'string' && typeof v.at === 'number' ? { name: v.name, at: v.at } : null
+  } catch {
+    return null
+  }
+}
+
+function publicMeta(m: LevelMeta, plays?: number | null, firstClear?: FirstClear | null) {
+  return {
+    id: m.id,
+    title: m.title,
+    author: m.author,
+    size: m.size,
+    createdAt: m.createdAt,
+    plays: plays ?? 0,
+    firstClear: firstClear ?? null,
+  }
 }
 
 // --- Spieler: hochladen ------------------------------------------------------------
@@ -165,6 +202,8 @@ export async function uploadLevel(ctx: Ctx, body: Record<string, unknown>) {
 
   const title = cleanText(body.title, 3, 32, 'Title')
   const author = cleanName(body.author) ?? 'Anonymous'
+  if (!isNameAllowed(title, ctx.blockedWords)) throw new ApiError(400, 'This title is not allowed.')
+  if (!isNameAllowed(author, ctx.blockedWords)) throw new ApiError(400, 'This name is not allowed.')
   const pid = playerId(body.playerId)
   const raw = body.data as LevelData
   const errors = validateLevel(raw)
@@ -178,7 +217,7 @@ export async function uploadLevel(ctx: Ctx, body: Record<string, unknown>) {
   if (!(await db.set(K.hash(hash), id, { nx: true }))) throw new ApiError(409, 'This level was already uploaded')
 
   const createdAt = ctx.now()
-  const meta: LevelMeta = { id, title, author, size: data.size, createdAt, hash, simVersion: SIM_VERSION, status: 'pending' }
+  const meta: LevelMeta = { id, title, author, size: data.size, createdAt, hash, simVersion: SIM_VERSION, status: 'pending', creator: pid }
   await db.set(K.level(id), JSON.stringify(data))
   await db.set(K.meta(id), JSON.stringify(meta))
   await db.zadd(K.pending, createdAt, id)
@@ -206,10 +245,11 @@ export async function listLevels(ctx: Ctx, sort: string, offset: number, limit: 
     ids = rows.map((r) => r.member)
     plays = await db.zscores(K.plays, ids)
   }
-  const metas = await db.mget(ids.map(K.meta))
+  // Level-Daten und First Clears in einem Befehl
+  const raw = await db.mget([...ids.map(K.meta), ...ids.map(K.firstClear)])
   const levels = ids.flatMap((_, i) => {
-    const m = parseMeta(metas[i])
-    return m && m.status === 'approved' ? [publicMeta(m, plays[i])] : []
+    const m = parseMeta(raw[i])
+    return m && m.status === 'approved' ? [publicMeta(m, plays[i], parseFirstClear(raw[ids.length + i]))] : []
   })
   const total = await db.zcard(K.isNew)
   return { levels, total }
@@ -219,13 +259,13 @@ export async function listLevels(ctx: Ctx, sort: string, offset: number, limit: 
 export async function startLevel(ctx: Ctx, body: Record<string, unknown>) {
   const { db } = ctx
   const id = levelId(body.id)
-  const [rawMeta, rawLevel] = await db.mget([K.meta(id), K.level(id)])
+  const [rawMeta, rawLevel, rawFirst] = await db.mget([K.meta(id), K.level(id), K.firstClear(id)])
   const meta = parseMeta(rawMeta)
   if (!meta || meta.status !== 'approved' || !rawLevel) throw new ApiError(404, 'Level not found')
   if (typeof body.playerId === 'string' && PLAYER_RE.test(body.playerId)) {
     if (await db.set(K.seen(id, body.playerId), '1', { nx: true, ex: LIMITS.seenSeconds })) await db.zincr(K.plays, 1, id)
   }
-  return { meta: publicMeta(meta), data: { ...(JSON.parse(rawLevel) as LevelData), title: meta.title } }
+  return { meta: publicMeta(meta, undefined, parseFirstClear(rawFirst)), data: { ...(JSON.parse(rawLevel) as LevelData), title: meta.title } }
 }
 
 export const leaderboard = (ctx: Ctx, id: string, pid: string | null) => boardOf(ctx, K.times(id), pid)
@@ -253,18 +293,40 @@ export async function getTimes(ctx: Ctx, idRaw: unknown, pidRaw: unknown) {
   return leaderboard(ctx, id, pid)
 }
 
+/**
+ * Hält fest, wer ein Level als Erster geschafft hat (außer dem Ersteller, dessen Beweis-Replay schon beim Upload zählt).
+ * SET NX: nur der erste Eintrag gewinnt, auch bei gleichzeitigen Anfragen. Der Name ist eine Momentaufnahme.
+ * Level aus der Zeit vor dieser Funktion kennen ihren Ersteller nicht: Dort zählt nur, wenn außer dem einen Eintrag
+ * (dem des Erstellers) noch niemand eine Zeit hat.
+ */
+async function recordFirstClear(ctx: Ctx, id: string, meta: LevelMeta, pid: string, name: string | null): Promise<boolean> {
+  const { db } = ctx
+  let creator = meta.creator
+  if (!creator) {
+    const rows = await db.zrange(K.times(id), 0, 1)
+    if (rows.length !== 1) return false
+    creator = rows[0].member
+  }
+  if (pid === creator) return false
+  const shown = name ?? (await db.mget([K.name(pid)]))[0] ?? 'Anonymous'
+  const entry: FirstClear = { name: shown, at: ctx.now() }
+  return db.set(K.firstClear(id), JSON.stringify(entry), { nx: true })
+}
+
 /** Trägt eine Zeit ein, nachdem der Server das Replay selbst nachgespielt hat */
 export async function submitTime(ctx: Ctx, body: Record<string, unknown>) {
   const { db } = ctx
   await rateLimit(ctx, 'time', LIMITS.timesPerHour, 3600)
   const id = levelId(body.id)
   const pid = playerId(body.playerId)
-  const name = cleanName(body.name)
-  const [rawMeta, rawLevel] = await db.mget([K.meta(id), K.level(id)])
+  const { name, rejected } = chosenName(ctx, body.name)
+  const [rawMeta, rawLevel, rawFirst] = await db.mget([K.meta(id), K.level(id), K.firstClear(id)])
   const meta = parseMeta(rawMeta)
   if (!meta || meta.status !== 'approved' || !rawLevel) throw new ApiError(404, 'Level not found')
 
   const ticks = verifyReplay(JSON.parse(rawLevel) as LevelData, body.replay)
+  // Nur solange es noch keinen gibt (also einmal pro Level), sonst kostet es keinen Befehl
+  const firstClear = rawFirst ? false : await recordFirstClear(ctx, id, meta, pid, name)
   const improved = await db.zaddIfLower(K.times(id), ticks, pid)
   if (improved) {
     // Replays gibt es nur für die Top-Plätze: wer hineinkommt, bekommt eines, wer hinausfällt, verliert es
@@ -276,7 +338,7 @@ export async function submitTime(ctx: Ctx, body: Record<string, unknown>) {
     }
   }
   if (name) await db.set(K.name(pid), name)
-  return { ticks, improved, ...(await leaderboard(ctx, id, pid)) }
+  return { ticks, improved, ...(rejected ? { nameRejected: true } : {}), ...(firstClear ? { firstClear: true } : {}), ...(await leaderboard(ctx, id, pid)) }
 }
 
 // --- Admin ---------------------------------------------------------------------------
@@ -326,6 +388,7 @@ export async function adminReview(ctx: Ctx, body: Record<string, unknown>) {
     await db.del(
       K.level(id),
       K.meta(id),
+      K.firstClear(id),
       K.times(id),
       K.hash(meta.hash),
       ...players.map((p) => K.replay(id, p.member)),

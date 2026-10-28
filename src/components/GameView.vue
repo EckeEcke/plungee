@@ -8,7 +8,7 @@ import type { Theme } from '../game/theme'
 import { medalFor, medalTargets } from '../game/medals'
 import { compileLevel, formatTicks, type LevelData } from '../sim'
 import MedalIcon from './MedalIcon.vue'
-import { loadName, type BoardState } from '../online/api'
+import { loadName, nameProblem, type BoardState } from '../online/api'
 
 const props = withDefaults(
   defineProps<{
@@ -35,6 +35,7 @@ const emit = defineEmits<{
 }>()
 
 const nameDraft = ref(loadName())
+const nameBad = computed(() => nameProblem(nameDraft.value))
 
 const column = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -218,9 +219,16 @@ function restart(): void {
           <div class="row" :class="{ 'row-best': hud.newBest }">
             <span>Best</span><b>{{ bestText }}</b>
           </div>
-          <div v-if="hud.newBest" class="badge">
-            <i v-for="n in 8" :key="n" class="spark" :style="{ '--a': n * 45 + 'deg' }" aria-hidden="true" />
-            <span class="badge-text">★ New best!</span>
+          <div v-if="hud.newBest || board?.firstClear" class="badges">
+            <div v-if="hud.newBest" class="badge">
+              <i v-for="n in 8" :key="n" class="spark" :style="{ '--a': n * 45 + 'deg' }" aria-hidden="true" />
+              <span class="badge-text">★ New best!</span>
+            </div>
+            <!-- Kommt erst, wenn der Server antwortet: Animation ohne Verzögerung -->
+            <div v-if="board?.firstClear" class="badge badge-first">
+              <i v-for="n in 8" :key="n" class="spark" :style="{ '--a': n * 45 + 'deg' }" aria-hidden="true" />
+              <span class="badge-text">⚑ First clear!</span>
+            </div>
           </div>
           <div v-if="board" class="board" aria-live="polite">
             <form v-if="board.status === 'needsName'" class="name-form" @submit.prevent="emit('name', nameDraft)">
@@ -233,8 +241,10 @@ function restart(): void {
                 placeholder="Your name"
                 autocomplete="nickname"
                 aria-label="Your name"
+                :aria-invalid="nameBad ? 'true' : undefined"
               />
-              <button class="cta" type="submit" :disabled="!nameDraft.trim()">Post time</button>
+              <p v-if="nameBad" class="board-note err">{{ nameBad }}</p>
+              <button class="cta" type="submit" :disabled="!nameDraft.trim() || !!nameBad">Post time</button>
               <button class="link" type="button" @click="emit('name', null)">Post as Anonymous</button>
             </form>
             <template v-else>
@@ -245,6 +255,7 @@ function restart(): void {
             <p v-if="board.status === 'loading'" class="board-note">Sending your time …</p>
             <p v-else-if="board.status === 'error'" class="board-note err">{{ board.error }}</p>
             <template v-else-if="board.board">
+              <p v-if="board.nameRejected" class="board-note err">Your name was not accepted, so you appear as Anonymous.</p>
               <p v-if="board.improved === false" class="board-note">Your best time on this level is faster.</p>
               <ol class="board-list">
                 <li v-for="r in board.board.top" :key="r.rank" :class="{ you: r.you }">
@@ -571,10 +582,17 @@ function restart(): void {
   margin-top: 10px;
 }
 
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  margin-top: 10px;
+}
+
 .badge {
   position: relative;
   display: inline-block;
-  margin-top: 10px;
   background: var(--accent);
   color: var(--outline);
   font-weight: 900;
@@ -584,6 +602,15 @@ function restart(): void {
   transform: rotate(-3deg);
   /* Delay passt zum Sound, der kurz nach dem Ziel-Jingle folgt */
   animation: badge-pop 0.6s cubic-bezier(0.2, 1.3, 0.4, 1) 0.7s both;
+}
+
+.badge-first {
+  animation-delay: 0s;
+  transform: rotate(3deg);
+}
+
+.badge-first .spark {
+  animation-delay: 0.15s;
 }
 
 .badge-text {

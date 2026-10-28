@@ -163,7 +163,7 @@ describe('Admin', () => {
     for (const sort of ['new', 'plays']) {
       const list = await call('GET', `/levels?sort=${sort}`)
       expect(list.body.levels).toEqual([
-        { id, title: 'Test Level', author: 'Alice', size: 'short', createdAt: now, plays: 0 },
+        { id, title: 'Test Level', author: 'Alice', size: 'short', createdAt: now, plays: 0, firstClear: null },
       ])
       expect(list.body.total).toBe(1)
     }
@@ -396,7 +396,7 @@ describe('Router', () => {
     expect((await call('GET', '/levels/')).status).toBe(200)
   })
 
-  it('Befehlsbudget: Liste 4, Start 3, Zeit eintragen höchstens 12 Befehle', async () => {
+  it('Befehlsbudget: Liste 4, Start 3, Zeit eintragen höchstens 13 Befehle (der erste Spieler braucht einen mehr für den First Clear)', async () => {
     const id = await approved()
     let before = db.commands
     await call('GET', '/levels?sort=plays')
@@ -406,6 +406,10 @@ describe('Router', () => {
     expect(db.commands - before).toBeLessThanOrEqual(3)
     before = db.commands
     await call('POST', '/time', { id, playerId: BOB, name: 'Bob', replay: FAST })
+    expect(db.commands - before).toBeLessThanOrEqual(13)
+    // Danach kostet der First Clear nichts mehr
+    before = db.commands
+    await call('POST', '/time', { id, playerId: ALICE, name: 'Alice', replay: FAST })
     expect(db.commands - before).toBeLessThanOrEqual(12)
   })
 })

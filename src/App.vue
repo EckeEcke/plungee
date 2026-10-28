@@ -137,7 +137,7 @@ async function post(stillCurrent: () => boolean, send: () => Promise<SubmitResul
     board.value = { status: 'loading' }
     try {
       const r = await send()
-      if (stillCurrent()) board.value = { status: 'ok', improved: r.improved, board: r, nameRejected: r.nameRejected }
+      if (stillCurrent()) board.value = { status: 'ok', improved: r.improved, board: r, nameRejected: r.nameRejected, firstClear: r.firstClear }
     } catch (e) {
       if (stillCurrent()) {
         board.value = { status: 'error', error: e instanceof Error ? e.message : 'Could not send your time' }

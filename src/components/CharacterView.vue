@@ -2,7 +2,7 @@
 import PageShell from './PageShell.vue'
 import { computed } from 'vue'
 import { themeById, type Theme } from '../game/theme'
-import { applyLook, COLORS, DEFAULT_LOOK, EYES, look } from '../game/look'
+import { applyLook, COLORS, DEFAULT_LOOK, EYES, look, PATTERN_COLORS, PATTERNS, randomLook } from '../game/look'
 import CharacterCanvas from './CharacterCanvas.vue'
 
 const props = defineProps<{ theme: Theme }>()
@@ -24,8 +24,17 @@ function swatch(id: string): { background: string } {
   return { background: `linear-gradient(180deg, ${body} 65%, ${shade} 65%)` }
 }
 
+/** Farbfeld für die Musterfarbe; „Dark“ folgt der Konturfarbe des Themes */
+function patternSwatch(hex: string | null): { background: string } {
+  return { background: hex ?? base.value.outline }
+}
+
 function reset(): void {
   Object.assign(look, DEFAULT_LOOK)
+}
+
+function randomize(): void {
+  Object.assign(look, randomLook(Math.random, { ...look }))
 }
 
 </script>
@@ -79,9 +88,46 @@ function reset(): void {
               {{ o.label }}
             </button>
           </div>
+
+          <h3>Pattern</h3>
+          <div class="chips" role="radiogroup" aria-label="Pattern">
+            <button
+              v-for="o in PATTERNS"
+              :key="o.id"
+              type="button"
+              role="radio"
+              :class="{ on: look.pattern === o.id }"
+              :aria-checked="look.pattern === o.id"
+              @click="look.pattern = o.id"
+            >
+              {{ o.label }}
+            </button>
+          </div>
+
+          <template v-if="look.pattern !== 'none'">
+            <h3>Pattern color</h3>
+            <div class="swatches" role="radiogroup" aria-label="Pattern color">
+              <button
+                v-for="c in PATTERN_COLORS"
+                :key="c.id"
+                type="button"
+                role="radio"
+                class="sw"
+                :class="{ on: look.patternColor === c.id }"
+                :aria-checked="look.patternColor === c.id"
+                :aria-label="c.label"
+                :title="c.label"
+                :style="patternSwatch(c.hex)"
+                @click="look.patternColor = c.id"
+              />
+            </div>
+          </template>
         </section>
 
-        <button class="reset" type="button" @click="reset">Reset to default</button>
+        <div class="actions">
+          <button class="reset" type="button" @click="randomize">🎲 Randomize</button>
+          <button class="reset" type="button" @click="reset">Reset to default</button>
+        </div>
       </div>
     </div>
   </div>
@@ -215,15 +261,21 @@ h3:first-child {
   border-color: var(--outline);
 }
 
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
 .reset {
-  justify-self: center;
   cursor: pointer;
   font: inherit;
   font-size: 14px;
   font-weight: 800;
   padding: 8px 18px;
-  color: var(--muted);
-  background: transparent;
+  color: var(--text);
+  background: var(--panel);
   border: 2px solid var(--line);
   border-radius: 999px;
 }

@@ -37,12 +37,41 @@ export const EYES = [
 
 export type EyeId = (typeof EYES)[number]['id']
 
+export const PATTERNS = [
+  { id: 'none', label: 'None' },
+  { id: 'stripes', label: 'Stripes' },
+  { id: 'dots', label: 'Dots' },
+  { id: 'checks', label: 'Checks' },
+  { id: 'stars', label: 'Stars' },
+  { id: 'hearts', label: 'Hearts' },
+] as const
+
+export type PatternId = (typeof PATTERNS)[number]['id']
+
+export interface PatternColor extends Option<string> {
+  /** null = Konturfarbe des jeweiligen Themes (dunkel auf hellem Körper) */
+  hex: string | null
+}
+
+// Kein Rot (Gefahr); Gelb ist hier erlaubt, weil das Muster nur auf dem Körper sitzt
+export const PATTERN_COLORS: readonly PatternColor[] = [
+  { id: 'white', label: 'White', hex: '#FFFFFF' },
+  { id: 'ink', label: 'Dark', hex: null },
+  { id: 'yellow', label: 'Yellow', hex: '#FFD23F' },
+  { id: 'rose', label: 'Rose', hex: '#FF8FC2' },
+  { id: 'mint', label: 'Mint', hex: '#7BE0C3' },
+  { id: 'sky', label: 'Sky', hex: '#8EC5FF' },
+  { id: 'orange', label: 'Orange', hex: '#FF8A3D' },
+]
+
 export interface Look {
   color: string
   eyes: EyeId
+  pattern: PatternId
+  patternColor: string
 }
 
-export const DEFAULT_LOOK: Readonly<Look> = { color: 'pink', eyes: 'round' }
+export const DEFAULT_LOOK: Readonly<Look> = { color: 'pink', eyes: 'round', pattern: 'none', patternColor: 'white' }
 
 const pick = <T extends string>(list: ReadonlyArray<{ id: T }>, v: unknown, fallback: T): T =>
   list.some((o) => o.id === v) ? (v as T) : fallback
@@ -53,6 +82,8 @@ export function sanitizeLook(raw: unknown): Look {
   return {
     color: pick(COLORS, r.color, DEFAULT_LOOK.color),
     eyes: pick(EYES, r.eyes, DEFAULT_LOOK.eyes),
+    pattern: pick(PATTERNS, r.pattern, DEFAULT_LOOK.pattern),
+    patternColor: pick(PATTERN_COLORS, r.patternColor, DEFAULT_LOOK.patternColor),
   }
 }
 
@@ -61,6 +92,27 @@ export function applyLook(theme: Theme, l: Pick<Look, 'color'>): Theme {
   const c = COLORS.find((o) => o.id === l.color)
   if (!c || !c.body || !c.shade) return theme
   return { ...theme, player: c.body, playerShade: c.shade }
+}
+
+/** Zufällige Kombination aus allen Optionen; `not` ist das aktuelle Aussehen, das nicht noch einmal herauskommt */
+export function randomLook(rand: () => number = Math.random, not?: Look): Look {
+  const one = <T>(list: readonly T[]): T => list[Math.min(list.length - 1, Math.floor(rand() * list.length))]
+  for (let i = 0; i < 20; i++) {
+    const l: Look = {
+      color: one(COLORS).id,
+      eyes: one(EYES).id,
+      pattern: one(PATTERNS).id,
+      patternColor: one(PATTERN_COLORS).id,
+    }
+    // Ohne Muster zählt die Musterfarbe nicht: sie bleibt wie sie war
+    if (l.pattern === 'none') l.patternColor = not?.patternColor ?? DEFAULT_LOOK.patternColor
+    const same = not && l.color === not.color && l.eyes === not.eyes && l.pattern === not.pattern && l.patternColor === not.patternColor
+    if (!same) return l
+  }
+  // Nur bei einem kaputten Zufall: wenigstens eine andere Körperfarbe als jetzt
+  const base = not ?? DEFAULT_LOOK
+  const i = COLORS.findIndex((c) => c.id === base.color)
+  return { ...base, color: COLORS[(i + 1) % COLORS.length].id }
 }
 
 const KEY = 'plungee:look'
@@ -76,7 +128,7 @@ export function loadLook(): Look {
 
 function saveLook(l: Look): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ color: l.color, eyes: l.eyes }))
+    localStorage.setItem(KEY, JSON.stringify({ color: l.color, eyes: l.eyes, pattern: l.pattern, patternColor: l.patternColor }))
   } catch {
     /* nicht kritisch */
   }
