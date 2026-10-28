@@ -5,6 +5,7 @@ import type { ProgressMap } from '../game/progress'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from '../levels'
 import { formatTicks } from '../sim'
 import MedalIcon from './MedalIcon.vue'
+import PageShell from './PageShell.vue'
 
 const props = defineProps<{ theme: Theme; progress: ProgressMap; difficulty: Difficulty; focusKey?: string }>()
 const emit = defineEmits<{ exit: []; play: [index: number]; 'update:difficulty': [d: Difficulty] }>()
@@ -26,21 +27,6 @@ function doneIn(d: Difficulty): string {
 }
 
 const grid = ref<HTMLElement | null>(null)
-
-const cssVars = computed(() => ({
-  '--panel': props.theme.ui.panel,
-  '--text': props.theme.ui.text,
-  '--accent': props.theme.ui.accent,
-  '--muted': props.theme.ui.muted,
-  '--bg1': props.theme.bgTop,
-  '--bg2': props.theme.bgBottom,
-  '--outline': props.theme.outline,
-  '--line': props.theme.ui.line,
-  '--c0': props.theme.decor[0],
-  '--c1': props.theme.decor[1],
-  '--c2': props.theme.decor[2],
-  '--c3': props.theme.decor[3],
-}))
 
 const done = computed(() => levels.value.filter((l) => props.progress[l.key]).length)
 const golds = computed(() => levels.value.filter((l) => props.progress[l.key]?.medal === 'gold').length)
@@ -70,24 +56,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="camp" :style="cssVars">
-    <!-- Deko wie auf der Startseite, nur auf breiten Bildschirmen und nur an den Seiten sichtbar -->
-    <svg class="decor" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <polygon points="150,120 230,260 70,260" fill="var(--c0)" opacity="0.5" />
-      <circle cx="1440" cy="170" r="52" fill="none" stroke="var(--c2)" stroke-width="14" opacity="0.5" />
-      <path d="M1230 420 q20 -30 40 0 t40 0 t40 0 t40 0" fill="none" stroke="var(--c1)" stroke-width="14" stroke-linecap="round" opacity="0.6" />
-      <path d="M90 520 l28 -34 l28 34 l28 -34 l28 34 l28 -34" fill="none" stroke="var(--c3)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" opacity="0.55" />
-      <g fill="var(--c2)" opacity="0.55">
-        <circle cx="1380" cy="640" r="8" /><circle cx="1412" cy="640" r="8" /><circle cx="1444" cy="640" r="8" />
-        <circle cx="1380" cy="672" r="8" /><circle cx="1412" cy="672" r="8" /><circle cx="1444" cy="672" r="8" />
-      </g>
-      <polygon points="190,690 270,750 190,810" fill="var(--c1)" opacity="0.5" />
-      <rect x="1250" y="740" width="64" height="64" rx="14" fill="var(--c0)" opacity="0.45" transform="rotate(14 1282 772)" />
-      <path d="M110 80 v50 M85 105 h50" stroke="var(--c3)" stroke-width="14" stroke-linecap="round" opacity="0.5" />
-      <circle cx="120" cy="330" r="14" fill="var(--c1)" opacity="0.5" />
-    </svg>
-
-    <div class="shell">
+  <PageShell :theme="theme">
+  <div class="camp">
     <header class="top">
       <div class="top-in">
         <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
@@ -157,37 +127,16 @@ onMounted(async () => {
         </Transition>
       </div>
     </div>
-    </div>
   </div>
+  </PageShell>
 </template>
 
 <style scoped>
 .camp {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(180deg, var(--bg1), var(--bg2));
-  color: var(--text);
-}
-
-.shell {
-  position: relative;
   flex: 1;
   min-height: 0;
-  width: 100%;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
-}
-
-.decor {
-  display: none;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
 }
 
 /* Kopfzeilen laufen über die ganze Breite, der Inhalt darin ist begrenzt */
@@ -404,13 +353,6 @@ onMounted(async () => {
    Die Kopfleiste geht über die ganze Breite, darunter steht ein Streifen mit den Kacheln,
    der seitlich nur durch Rahmenlinien begrenzt ist. Tabs ersetzen die Pfeile. */
 @media (min-width: 600px) {
-  /* Kopfzeile und Kacheln bilden einen Container, begrenzt nur durch seitliche Linien */
-  .shell {
-    width: min(100%, 1000px);
-    border-inline: 3px solid var(--line);
-    background: color-mix(in srgb, var(--bg1) 86%, transparent);
-  }
-
   .top-in {
     width: 100%;
     gap: 18px;
@@ -507,10 +449,6 @@ onMounted(async () => {
   .dtab.on {
     color: var(--outline);
     background: var(--accent);
-  }
-
-  .decor {
-    display: block;
   }
 
   .column {

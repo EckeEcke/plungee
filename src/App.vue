@@ -5,6 +5,8 @@ import CampaignView from './components/CampaignView.vue'
 import GameView from './components/GameView.vue'
 import OnlineView from './components/OnlineView.vue'
 import AdminView from './components/AdminView.vue'
+import LegalView from './components/LegalView.vue'
+import { privacyFromUrl } from './legal'
 import WeeklyView from './components/WeeklyView.vue'
 import CharacterView from './components/CharacterView.vue'
 import CharacterCanvas from './components/CharacterCanvas.vue'
@@ -27,7 +29,7 @@ import { loadProgress, recordResult } from './game/progress'
 import { themeById } from './game/theme'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from './levels'
 
-const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin'>('menu')
+const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin' | 'privacy'>('menu')
 
 /** Gespeicherte Wahl zuerst, sonst die Systemeinstellung (im Webview der Reddit-App erbt sie das Gerät) */
 function initialDark(): boolean {
@@ -135,7 +137,7 @@ async function post(stillCurrent: () => boolean, send: () => Promise<SubmitResul
     board.value = { status: 'loading' }
     try {
       const r = await send()
-      if (stillCurrent()) board.value = { status: 'ok', improved: r.improved, board: r }
+      if (stillCurrent()) board.value = { status: 'ok', improved: r.improved, board: r, nameRejected: r.nameRejected }
     } catch (e) {
       if (stillCurrent()) {
         board.value = { status: 'error', error: e instanceof Error ? e.message : 'Could not send your time' }
@@ -152,8 +154,9 @@ async function post(stillCurrent: () => boolean, send: () => Promise<SubmitResul
 
 function onNameChosen(name: string | null): void {
   const clean = name?.trim().slice(0, 16) ?? ''
-  if (clean) saveName(clean)
-  else anonymousOk = true
+  if (clean && saveName(clean)) {
+    /* gespeichert */
+  } else anonymousOk = true
   void pendingPost?.()
 }
 
@@ -193,9 +196,12 @@ onMounted(() => {
     return
   }
   const id = params.get('level')
-  if (params.has('admin')) screen.value = 'admin'
+  const privacy = privacyFromUrl(location.pathname, params)
+  if (privacy) screen.value = 'privacy'
+  else if (params.has('admin')) screen.value = 'admin'
   else if (id) void playOnline(id, 'menu')
-  if (id || params.has('admin')) history.replaceState(null, '', location.pathname)
+  if (privacy) history.replaceState(null, '', '/')
+  else if (id || params.has('admin')) history.replaceState(null, '', location.pathname)
 })
 
 watch(themeId, (id) => {
@@ -286,6 +292,8 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
   <AdminView v-else-if="screen === 'admin'" :theme="theme" @exit="screen = 'menu'" />
 
+  <LegalView v-else-if="screen === 'privacy'" :theme="theme" @exit="screen = 'menu'" />
+
   <CampaignView
     v-else-if="screen === 'campaign'"
     :theme="theme"
@@ -366,9 +374,11 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
       <ul class="tips">
         <li><b>◀ ▶</b> to move, gravity does the rest</li>
-        <li><b>Springs</b> send you back up</li>
-        <li><b>Red</b> is always dangerous</li>
       </ul>
+
+      <nav class="legal-links" aria-label="Legal">
+        <a href="/privacy" @click.prevent="screen = 'privacy'">Privacy</a>
+      </nav>
     </div>
   </main>
   </Transition>
@@ -407,15 +417,17 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 .menu {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
   background: linear-gradient(180deg, var(--bg1), var(--bg2));
   color: var(--menu-text);
-  overflow: hidden;
+  /* Auf kleinen Bildschirmen scrollbar; margin: auto am Inhalt zentriert ihn, ohne oben abzuschneiden */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .decor {
-  position: absolute;
+  position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -424,12 +436,14 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
 .content {
   position: relative;
+  margin: auto;
+  flex: none;
   width: min(100%, 420px);
-  padding: 24px 24px 32px;
+  padding: 24px 24px max(32px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 18px;
 }
 
 .logo {
@@ -546,6 +560,21 @@ h1 {
   font-weight: 700;
   line-height: 1.7;
   text-align: center;
+}
+
+.legal-links {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.legal-links a {
+  color: var(--menu-text);
+  opacity: 0.75;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .snd-row {

@@ -1,4 +1,7 @@
 import type { LevelData } from '../sim'
+import { nameProblem } from './nameFilter'
+
+export { nameProblem }
 
 /** Antworten der Netlify-API (siehe netlify/lib/levels.ts) */
 export interface OnlineMeta {
@@ -30,10 +33,13 @@ export interface BoardState {
   status: 'loading' | 'ok' | 'error' | 'needsName'
   error?: string
   improved?: boolean
+  /** Der Server hat den Namen abgelehnt */
+  nameRejected?: boolean
   board?: Board
 }
 
-export type SubmitResult = Board & { ticks: number; improved: boolean }
+/** nameRejected: der Server hat den Namen abgelehnt (die Zeit zählt trotzdem) */
+export type SubmitResult = Board & { ticks: number; improved: boolean; nameRejected?: boolean }
 export type LevelSort = 'new' | 'plays'
 
 export class OnlineError extends Error {
@@ -80,12 +86,15 @@ export function loadName(): string {
   }
 }
 
-export function saveName(name: string): void {
+/** Speichert den Namen. Ein gesperrter Name wird nicht gespeichert (false), damit er nie gesendet wird. */
+export function saveName(name: string): boolean {
+  if (nameProblem(name)) return false
   try {
     localStorage.setItem(NAME_KEY, name.slice(0, 16))
   } catch {
     /* nicht kritisch */
   }
+  return true
 }
 
 // --- Aufrufe -------------------------------------------------------------------------
@@ -115,7 +124,10 @@ async function call<T>(path: string, init?: { body?: unknown; headers?: Record<s
   return data as T
 }
 
-const nameOrUndefined = (): string | undefined => loadName().trim() || undefined
+const nameOrUndefined = (): string | undefined => {
+  const n = loadName().trim()
+  return n && !nameProblem(n) ? n : undefined
+}
 
 export const fetchLevels = (sort: LevelSort, offset = 0, limit = 20) =>
   call<{ levels: OnlineMeta[]; total: number }>(`/levels?sort=${sort}&offset=${offset}&limit=${limit}`)
@@ -178,3 +190,35 @@ export const adminLevel = (token: string, id: string) =>
 
 export const adminReview = (token: string, id: string, action: 'approve' | 'reject' | 'delete') =>
   call<{ id: string; status: string }>('/admin/review', { body: { id, action }, headers: adminHeaders(token) })
+
+export interface AdminLevelRow extends OnlineMeta {
+  flagged: boolean
+}
+
+export interface AdminTimeRow {
+  rank: number
+  playerId: string
+  name: string
+  ticks: number
+  hasReplay: boolean
+  flagged: boolean
+}
+
+export const adminLevels = (token: string, offset = 0, limit = 50) =>
+  call<{ levels: AdminLevelRow[]; total: number }>(`/admin/levels?offset=${offset}&limit=${limit}`, {
+    headers: adminHeaders(token),
+  })
+
+export const adminWeeks = (token: string) => call<{ weeks: string[] }>('/admin/weeks', { headers: adminHeaders(token) })
+
+/** target: "level:{id}" oder "week:{montag}" */
+export const adminTimes = (token: string, target: string) =>
+  call<{ total: number; entries: AdminTimeRow[] }>(`/admin/times?target=${encodeURIComponent(target)}`, {
+    headers: adminHeaders(token),
+  })
+
+export const adminDeleteTime = (token: string, target: string, playerId: string, clearName: boolean) =>
+  call<{ deleted: true }>('/admin/time/delete', { body: { target, playerId, clearName }, headers: adminHeaders(token) })
+
+export const adminClearName = (token: string, playerId: string) =>
+  call<{ cleared: true }>('/admin/name/clear', { body: { playerId }, headers: adminHeaders(token) })

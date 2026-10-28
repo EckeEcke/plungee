@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import PageShell from './PageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Theme } from '../game/theme'
 import { formatTicks } from '../sim'
-import { fetchWeekly, fetchWeeklyBoard, loadName, saveName, type WeeklyBoard, type WeeklyInfo } from '../online/api'
+import { fetchWeekly, fetchWeeklyBoard, loadName, nameProblem, saveName, type WeeklyBoard, type WeeklyInfo } from '../online/api'
 
 const props = defineProps<{ theme: Theme }>()
 const emit = defineEmits<{ exit: []; play: [info: WeeklyInfo] }>()
@@ -12,19 +13,9 @@ const board = ref<WeeklyBoard | null>(null)
 const loading = ref(true)
 const error = ref('')
 const name = ref(loadName())
+const nameBad = computed(() => nameProblem(name.value))
 const nowMs = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | undefined
-
-const cssVars = computed(() => ({
-  '--panel': props.theme.ui.panel,
-  '--text': props.theme.ui.text,
-  '--accent': props.theme.ui.accent,
-  '--muted': props.theme.ui.muted,
-  '--bg1': props.theme.bgTop,
-  '--bg2': props.theme.bgBottom,
-  '--outline': props.theme.outline,
-  '--line': props.theme.ui.line,
-}))
 
 async function load(): Promise<void> {
   loading.value = true
@@ -62,7 +53,8 @@ function onName(e: Event): void {
 </script>
 
 <template>
-  <div class="weekly" :style="cssVars">
+  <PageShell :theme="theme">
+  <div class="weekly">
     <header class="top">
       <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
       <div class="title">
@@ -89,8 +81,9 @@ function onName(e: Event): void {
 
           <label class="name">
             <span>Playing as</span>
-            <input type="text" maxlength="16" placeholder="Anonymous" :value="name" @input="onName" />
+            <input type="text" maxlength="16" placeholder="Anonymous" :value="name" :aria-invalid="nameBad ? 'true' : undefined" @input="onName" />
           </label>
+          <p v-if="nameBad" class="bad">{{ nameBad }}</p>
 
           <section class="card">
             <div class="head">
@@ -125,16 +118,15 @@ function onName(e: Event): void {
       </div>
     </div>
   </div>
+  </PageShell>
 </template>
 
 <style scoped>
 .weekly {
-  position: fixed;
-  inset: 0;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--bg1), var(--bg2));
-  color: var(--text);
 }
 
 .top {
@@ -313,6 +305,14 @@ function onName(e: Event): void {
   font-size: 13px;
   font-weight: 800;
   color: var(--muted);
+}
+
+.bad {
+  margin: -8px 0 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent);
 }
 
 .name input {

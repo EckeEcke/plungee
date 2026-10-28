@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import PageShell from './PageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import type { Theme } from '../game/theme'
-import { fetchLevels, loadName, saveName, type LevelSort, type OnlineMeta } from '../online/api'
+import { fetchLevels, loadName, nameProblem, saveName, type LevelSort, type OnlineMeta } from '../online/api'
 
 const props = defineProps<{ theme: Theme }>()
 const emit = defineEmits<{ exit: []; play: [id: string] }>()
@@ -13,19 +14,9 @@ const total = ref(0)
 const loading = ref(false)
 const error = ref('')
 const name = ref(loadName())
+const nameBad = computed(() => nameProblem(name.value))
 /** Verwirft Antworten veralteter Anfragen (schnelles Umschalten der Reiter) */
 let ticket = 0
-
-const cssVars = computed(() => ({
-  '--panel': props.theme.ui.panel,
-  '--text': props.theme.ui.text,
-  '--accent': props.theme.ui.accent,
-  '--muted': props.theme.ui.muted,
-  '--bg1': props.theme.bgTop,
-  '--bg2': props.theme.bgBottom,
-  '--outline': props.theme.outline,
-  '--line': props.theme.ui.line,
-}))
 
 /** Freigegebene Level können in der Liste fehlen (Seite voll, aber nicht alle sichtbar): offset zählt Server-Zeilen */
 let offset = 0
@@ -76,7 +67,8 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
 </script>
 
 <template>
-  <div class="community" :style="cssVars">
+  <PageShell :theme="theme">
+  <div class="community">
     <header class="top">
       <div class="top-in">
         <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
@@ -99,8 +91,9 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
         </div>
         <label class="name">
           <span>Your name</span>
-          <input type="text" maxlength="16" placeholder="Anonymous" :value="name" @input="onName" />
+          <input type="text" maxlength="16" placeholder="Anonymous" :value="name" :aria-invalid="nameBad ? 'true' : undefined" @input="onName" />
         </label>
+        <p v-if="nameBad" class="bad">{{ nameBad }}</p>
       </div>
     </div>
 
@@ -124,16 +117,15 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
       <button v-if="canMore" class="more" type="button" @click="load(false)">Show more</button>
     </div>
   </div>
+  </PageShell>
 </template>
 
 <style scoped>
 .community {
-  position: fixed;
-  inset: 0;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--bg1), var(--bg2));
-  color: var(--text);
 }
 
 .top,
@@ -234,6 +226,15 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   border-radius: 10px;
 }
 
+.bad {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
 .scroll {
   flex: 1;
   min-height: 0;
@@ -318,5 +319,14 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   border: 3px solid var(--outline);
   border-radius: 14px;
   box-shadow: 3px 3px 0 var(--outline);
+}
+
+/* Im breiten Container sitzen die Kopfzeilen links wie bei den anderen Seiten */
+@media (min-width: 600px) {
+  .top-in,
+  .bar-in {
+    width: 100%;
+    padding-inline: 24px;
+  }
 }
 </style>

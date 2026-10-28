@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageShell from './PageShell.vue'
 import { computed } from 'vue'
 import { themeById, type Theme } from '../game/theme'
 import { applyLook, COLORS, DEFAULT_LOOK, EYES, look } from '../game/look'
@@ -27,20 +28,11 @@ function reset(): void {
   Object.assign(look, DEFAULT_LOOK)
 }
 
-const cssVars = computed(() => ({
-  '--panel': props.theme.ui.panel,
-  '--text': props.theme.ui.text,
-  '--accent': props.theme.ui.accent,
-  '--muted': props.theme.ui.muted,
-  '--bg1': props.theme.bgTop,
-  '--bg2': props.theme.bgBottom,
-  '--outline': props.theme.outline,
-  '--line': props.theme.ui.line,
-}))
 </script>
 
 <template>
-  <div class="chr-page" :style="cssVars">
+  <PageShell :theme="theme">
+  <div class="chr-page">
     <header class="top">
       <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
       <div class="title">
@@ -93,16 +85,15 @@ const cssVars = computed(() => ({
       </div>
     </div>
   </div>
+  </PageShell>
 </template>
 
 <style scoped>
 .chr-page {
-  position: fixed;
-  inset: 0;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--bg1), var(--bg2));
-  color: var(--text);
 }
 
 .top {
