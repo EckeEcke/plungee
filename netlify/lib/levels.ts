@@ -313,6 +313,26 @@ async function recordFirstClear(ctx: Ctx, id: string, meta: LevelMeta, pid: stri
   return db.set(K.firstClear(id), JSON.stringify(entry), { nx: true })
 }
 
+/**
+ * Die Replays der Top 5 eines Community-Levels (für die Ghosts im Spiel). Nur freigegebene Level.
+ * Spieler-IDs bleiben geheim: `you` markiert nur den Eintrag des Anfragenden. Einträge ohne Replay (nachgerückt
+ * nach einem Admin-Löschen) fehlen. Zwei Befehle: Rangliste, dann Namen und Replays zusammen.
+ */
+export async function levelGhosts(ctx: Ctx, idRaw: unknown, pidRaw: unknown) {
+  const { db } = ctx
+  const id = levelId(idRaw)
+  const pid = typeof pidRaw === 'string' && PLAYER_RE.test(pidRaw) ? pidRaw : null
+  const meta = parseMeta((await db.mget([K.meta(id)]))[0] ?? null)
+  if (!meta || meta.status !== 'approved') throw new ApiError(404, 'Level not found')
+  const top = await db.zrange(K.times(id), 0, LIMITS.topTimes - 1)
+  const raw = await db.mget([...top.map((t) => K.name(t.member)), ...top.map((t) => K.replay(id, t.member))])
+  const entries = top.flatMap((t, i) => {
+    const replay = raw[top.length + i]
+    return replay ? [{ rank: i + 1, name: raw[i] ?? 'Anonymous', ticks: t.score, replay, you: t.member === pid }] : []
+  })
+  return { entries }
+}
+
 /** Trägt eine Zeit ein, nachdem der Server das Replay selbst nachgespielt hat */
 export async function submitTime(ctx: Ctx, body: Record<string, unknown>) {
   const { db } = ctx

@@ -17,6 +17,7 @@ import {
   type LaserPhase,
 } from '../sim'
 import { duckMusic, playSfx, setLoop, stopAllLoops } from '../audio/audio'
+import { Ghost, ghostSettings, loadLocalGhost, makeGhost, saveLocalGhost, type GhostSpec } from './ghost'
 import { InputController } from './input'
 import { Renderer } from './renderer'
 import type { Theme } from './theme'
@@ -72,6 +73,9 @@ export class Game {
   /** Letzte Halbperiode des Blinktakts (wechselt alle BLINK_HALF Ticks) */
   private blinkPrev = 0
   private disposed = false
+  /** Eigener Ghost der Bestzeit (nur wenn eingeschaltet und vorhanden) */
+  private selfGhost: Ghost | null = null
+  private otherGhosts: Ghost[] = []
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -95,6 +99,7 @@ export class Game {
     this.levelKey = key
     this.bestTicks = this.readBest()
     this.renderer.setLevel(level)
+    this.loadSelfGhost()
     this.resize()
     this.restart()
     if (!this.raf) {
@@ -112,8 +117,25 @@ export class Game {
     this.renderer.setTopInset(px)
   }
 
+  /** Weitere Ghosts (z. B. die Top 5 eines Community-Levels). Ungültige Replays werden still übergangen. */
+  setGhosts(specs: GhostSpec[]): void {
+    this.otherGhosts = specs.flatMap((s) => makeGhost(this.level, s) ?? [])
+    for (const g of this.otherGhosts) g.reset()
+  }
+
+  /** Alle Ghosts, die gerade laufen sollen */
+  private activeGhosts(): Ghost[] {
+    return [...(ghostSettings.self && this.selfGhost ? [this.selfGhost] : []), ...this.otherGhosts]
+  }
+
+  private loadSelfGhost(): void {
+    const saved = loadLocalGhost(this.levelKey)
+    this.selfGhost = saved ? makeGhost(this.level, { replay: saved.replay }, saved.ticks) : null
+  }
+
   restart(): void {
     this.world = new World(this.level)
+    for (const g of [this.selfGhost, ...this.otherGhosts]) g?.reset()
     window.clearTimeout(this.bestTimer)
     stopAllLoops()
     this.lastCountdown = 0
@@ -189,12 +211,14 @@ export class Game {
       }
       this.emitHud()
     } else if (this.status === 'running') {
+      const ghosts = this.activeGhosts()
       this.acc += dtMs
       while (this.acc >= STEP_MS && this.status === 'running') {
         this.acc -= STEP_MS
         const dir: InputDir = this.input.dir
         if (this.inputCount < MAX_REPLAY_TICKS) this.inputs[this.inputCount++] = dir
         this.world.step(dir)
+        for (const g of ghosts) g.step()
         if (this.world.finished) this.finish()
       }
       if (this.status === 'running') this.ambientSounds()
@@ -202,7 +226,7 @@ export class Game {
     }
 
     this.renderer.update(dtMs / 1000, this.world)
-    this.renderer.draw(this.world, this.status === 'running' ? this.acc / STEP_MS : 0, this.status === 'running')
+    this.renderer.draw(this.world, this.status === 'running' ? this.acc / STEP_MS : 0, this.status === 'running', this.activeGhosts())
   }
 
   private finish(): void {
@@ -213,6 +237,9 @@ export class Game {
       this.newBest = true
       this.bestTicks = t
       this.writeBest(t)
+      // Neue Bestzeit: Replay merken, der Ghost beim nächsten Versuch ist dieser Lauf
+      saveLocalGhost(this.levelKey, t, this.replay)
+      this.selfGhost = makeGhost(this.level, { replay: this.replay }, t)
     }
     stopAllLoops()
     playSfx('finish')

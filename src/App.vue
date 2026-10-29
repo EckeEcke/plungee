@@ -13,7 +13,9 @@ import CharacterCanvas from './components/CharacterCanvas.vue'
 import { applyLook, look } from './game/look'
 import SoundIcon from './components/SoundIcon.vue'
 import { audioSettings } from './audio/audio'
+import { ghostSettings, type GhostSpec } from './game/ghost'
 import {
+  fetchGhosts,
   loadName,
   saveName,
   startOnlineLevel,
@@ -93,6 +95,8 @@ function onFinished(res: { ticks: number; deaths: number }): void {
 // --- Community-Level ---------------------------------------------------------------
 
 const onlineLevel = ref<{ meta: OnlineMeta; data: LevelData } | null>(null)
+/** Ghosts der Top 5 für das gerade gestartete Community-Level (leer, wenn aus oder nicht ladbar) */
+const onlineGhosts = ref<GhostSpec[]>([])
 const board = ref<BoardState | null>(null)
 const notice = ref('')
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
@@ -104,13 +108,39 @@ function showNotice(text: string): void {
   noticeTimer = setTimeout(() => (notice.value = ''), 4500)
 }
 
+/** Farben der Top-5-Ghosts: kein Rot und kein Gelb (Gefahr, Ziel) */
+const GHOST_COLORS = ['#3A86FF', '#2ECC71', '#9B6BFF', '#FF8A3D', '#1FD1C5']
+
+/** Die Top-5-Ghosts, wenn der Spieler sie eingeschaltet hat. Ein Fehler oder eine lange Wartezeit lassen das Level trotzdem starten. */
+async function ghostsFor(id: string): Promise<GhostSpec[]> {
+  if (!ghostSettings.top) return []
+  try {
+    const res = await Promise.race([
+      fetchGhosts(id),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+    ])
+    if (!res) return []
+    return res.entries
+      // Der eigene Eintrag ist schon der eigene Ghost, wenn der an ist
+      .filter((e) => !(e.you && ghostSettings.self))
+      .map((e) => ({
+        replay: e.replay,
+        label: `${e.rank}. ${e.name}`,
+        color: GHOST_COLORS[(e.rank - 1) % GHOST_COLORS.length],
+      }))
+  } catch {
+    return []
+  }
+}
+
 /** Lädt ein Community-Level und startet es; `back` ist die Seite, auf die Fehler und „Zurück“ führen */
 async function playOnline(id: string, back: 'online' | 'menu' = 'online'): Promise<void> {
   if (loadingOnline) return
   loadingOnline = true
   try {
-    const res = await startOnlineLevel(id)
+    const [res, ghosts] = await Promise.all([startOnlineLevel(id), ghostsFor(id)])
     onlineLevel.value = res
+    onlineGhosts.value = ghosts
     board.value = null
     screen.value = 'onlinePlay'
   } catch (e) {
@@ -261,6 +291,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     :theme="theme"
     :board="board"
     :share-url="levelLink(onlineLevel.meta.id)"
+    :ghosts="onlineGhosts"
     :intro="{ number: 0, title: onlineLevel.meta.title }"
     exit-icon="▦"
     exit-text="Community levels"
@@ -369,6 +400,25 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
           @click="audioSettings.sfx = !audioSettings.sfx"
         >
           <SoundIcon kind="sound" :on="audioSettings.sfx" :size="17" /> Sound
+        </button>
+        <button
+          class="snd"
+          :class="{ on: ghostSettings.self }"
+          type="button"
+          role="switch"
+          :aria-checked="ghostSettings.self"
+          title="Race your own best run as a ghost"
+          @click="ghostSettings.self = !ghostSettings.self"
+        >
+          <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true">
+            <path
+              d="M3 14V7a5 5 0 0 1 10 0v7l-2-1.6L9 14l-1-1.6L7 14l-2-1.6z"
+              fill="currentColor"
+            />
+            <circle cx="6" cy="7" r="1.1" :fill="ghostSettings.self ? 'var(--accent)' : 'var(--bg2)'" />
+            <circle cx="10" cy="7" r="1.1" :fill="ghostSettings.self ? 'var(--accent)' : 'var(--bg2)'" />
+          </svg>
+          Ghost
         </button>
       </div>
 

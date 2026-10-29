@@ -5,6 +5,7 @@ import {
   adminPending,
   adminReview,
   getTimes,
+  levelGhosts,
   listLevels,
   requireAdmin,
   startLevel,
@@ -66,6 +67,8 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
         return json(await submitTime(ctx, await readBody(req)))
       case 'GET /times':
         return json(await getTimes(ctx, url.searchParams.get('id'), url.searchParams.get('player')))
+      case 'GET /ghosts':
+        return json(await levelGhosts(ctx, url.searchParams.get('id'), url.searchParams.get('player')))
       case 'GET /weekly': {
         // Level und Zeitraum sind für alle gleich: das CDN darf sie kurz zwischenspeichern
         return json(await weeklyInfo(ctx), 200, {
@@ -105,7 +108,7 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
         await requireAdmin(ctx, req.headers.get('x-admin-token'))
         return json(await adminClearName(ctx, await readBody(req)))
     }
-    const known = ['/weekly', '/weekly/board', '/weekly/time', '/levels', '/start', '/upload', '/time', '/times', '/admin/pending', '/admin/level', '/admin/review', '/admin/levels', '/admin/weeks', '/admin/times', '/admin/time/delete', '/admin/name/clear', '/admin/firstclear/clear']
+    const known = ['/ghosts', '/weekly', '/weekly/board', '/weekly/time', '/levels', '/start', '/upload', '/time', '/times', '/admin/pending', '/admin/level', '/admin/review', '/admin/levels', '/admin/weeks', '/admin/times', '/admin/time/delete', '/admin/name/clear', '/admin/firstclear/clear']
     return known.includes(path) ? json({ error: 'Method not allowed' }, 405) : json({ error: 'Not found' }, 404)
   } catch (e) {
     if (e instanceof ApiError) return json({ error: e.message }, e.status)

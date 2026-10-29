@@ -143,6 +143,19 @@ export const startOnlineLevel = (id: string) =>
 export const submitTime = (id: string, replay: string) =>
   call<SubmitResult>('/time', { body: { id, replay, playerId: playerId(), name: nameOrUndefined() } })
 
+export interface GhostEntry {
+  rank: number
+  name: string
+  ticks: number
+  replay: string
+  /** Der eigene Eintrag */
+  you: boolean
+}
+
+/** Replays der Top 5 eines Community-Levels (für Ghosts) */
+export const fetchGhosts = (id: string) =>
+  call<{ entries: GhostEntry[] }>(`/ghosts?id=${encodeURIComponent(id)}&player=${playerId()}`)
+
 export const fetchBoard = (id: string) => call<Board>(`/times?id=${encodeURIComponent(id)}&player=${playerId()}`)
 
 export const uploadLevel = (title: string, data: LevelData, replay: string) =>

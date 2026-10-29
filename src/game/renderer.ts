@@ -38,7 +38,8 @@ import {
   type SimEvent,
   type World,
 } from '../sim'
-import { drawCharacter } from './character'
+import { drawCharacter, type CharacterColors } from './character'
+import type { Ghost } from './ghost'
 import { look } from './look'
 import { Particles } from './particles'
 import type { Theme } from './theme'
@@ -375,7 +376,7 @@ export class Renderer {
 
   // --- Zeichnen --------------------------------------------------------------
 
-  draw(world: World, alpha: number, running: boolean): void {
+  draw(world: World, alpha: number, running: boolean, ghosts: readonly Ghost[] = []): void {
     const ctx = this.ctx
     const th = this.theme
     const w = this.canvas.width
@@ -415,6 +416,7 @@ export class Renderer {
     const ct = running ? world.tick - 1 + alpha : world.tick
     for (const c of lv.crushers) this.drawCrusher(ctx, c, ct, world)
     this.drawSpeedlines(ctx, world)
+    this.drawGhosts(ctx, ghosts, alpha)
     this.drawPlayer(ctx, world, alpha)
     this.particles.draw(ctx)
 
@@ -1272,6 +1274,45 @@ export class Renderer {
     ctx.restore()
   }
 
+  /** Ghosts: halbtransparente Figuren hinter dem Spieler, gleiche Zeichnung wie die Figur */
+  private drawGhosts(ctx: CanvasRenderingContext2D, ghosts: readonly Ghost[], alpha: number): void {
+    for (const g of ghosts) {
+      if (!g.visible) continue
+      const w = g.world
+      const p = w.p
+      const x = w.prevX + (p.x - w.prevX) * alpha
+      const y = w.prevY + (p.y - w.prevY) * alpha
+      const vyN = clamp(p.vy / TERMINAL_VY, -1, 1)
+      const colors: CharacterColors = g.spec.color
+        ? { ...this.theme, player: g.spec.color, playerShade: darken(g.spec.color, 0.78) }
+        : this.theme
+
+      ctx.save()
+      ctx.translate(x + PLAYER_W / 2, y + PLAYER_H)
+      ctx.globalAlpha = 0.42
+      drawCharacter(ctx, colors, look, {
+        face: p.facing * 0.7,
+        ox: clamp(p.vx / 110, -1, 1) * 1.1,
+        oy: vyN,
+        fall: Math.max(0, vyN),
+        stun: p.stun > 0,
+        blink: false,
+      })
+      if (g.spec.label) {
+        ctx.globalAlpha = 0.85
+        ctx.font = '700 5px system-ui, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.lineJoin = 'round'
+        ctx.lineWidth = 1.6
+        ctx.strokeStyle = this.theme.outline
+        ctx.fillStyle = '#ffffff'
+        ctx.strokeText(g.spec.label, 0, -14)
+        ctx.fillText(g.spec.label, 0, -14)
+      }
+      ctx.restore()
+    }
+  }
+
   private drawPlayer(ctx: CanvasRenderingContext2D, world: World, alpha: number): void {
     const th = this.theme
     const p = world.p
@@ -1301,4 +1342,14 @@ export class Renderer {
     })
     ctx.restore()
   }
+}
+
+/** Mischt Schwarz in eine Hex-Farbe (factor < 1 = dunkler) */
+function darken(hex: string, factor: number): string {
+  const n = parseInt(hex.replace('#', ''), 16)
+  const c = (shift: number): string =>
+    Math.round(((n >> shift) & 255) * factor)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${c(16)}${c(8)}${c(0)}`
 }

@@ -2,6 +2,7 @@
 import PageShell from './PageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import type { Theme } from '../game/theme'
+import { ghostSettings } from '../game/ghost'
 import { fetchLevels, loadName, nameProblem, saveName, type LevelSort, type OnlineMeta } from '../online/api'
 
 const props = defineProps<{ theme: Theme }>()
@@ -94,6 +95,10 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
           <input type="text" maxlength="16" placeholder="Anonymous" :value="name" :aria-invalid="nameBad ? 'true' : undefined" @input="onName" />
         </label>
         <p v-if="nameBad" class="bad">{{ nameBad }}</p>
+        <label class="ghosts" title="Race the replays of the five best players">
+          <input v-model="ghostSettings.top" type="checkbox" />
+          <span>Show top 5 ghosts</span>
+        </label>
       </div>
     </div>
 
@@ -233,6 +238,24 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   background: transparent;
   border: 2px solid var(--line);
   border-radius: 10px;
+}
+
+.ghosts {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ghosts input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .bad {

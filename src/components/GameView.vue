@@ -4,6 +4,7 @@ import SoundIcon from './SoundIcon.vue'
 import { consumeControlsHint } from '../game/hintSeen'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { Game, type HudState } from '../game/game'
+import type { GhostSpec } from '../game/ghost'
 import type { Theme } from '../game/theme'
 import { medalFor, medalTargets } from '../game/medals'
 import { compileLevel, formatTicks, type LevelData } from '../sim'
@@ -23,8 +24,10 @@ const props = withDefaults(
     board?: BoardState | null
     /** Link zum Level (nur Community-Level): zeigt im Ergebnis einen Teilen-Knopf */
     shareUrl?: string | null
+    /** Zusätzliche Ghosts (Top 5 eines Community-Levels) */
+    ghosts?: GhostSpec[]
   }>(),
-  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null },
+  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [] },
 )
 const emit = defineEmits<{
   exit: []
@@ -94,6 +97,10 @@ onMounted(() => {
   })
   measureInset()
   game.load(compileLevel(props.levelData), props.levelKey)
+  if (props.ghosts.length > 0) {
+    game.setGhosts(props.ghosts)
+    game.restart()
+  }
   insetObs = new ResizeObserver(measureInset)
   insetObs.observe(column.value)
 })
