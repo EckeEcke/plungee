@@ -73,9 +73,10 @@ const cssVars = computed(() => ({
 const timeText = computed(() => formatTicks(hud.value.ticks))
 /** Eigene Bestzeit im Spiel, bei Online-Leveln und der Weekly die Bestzeit des Levels laut Server */
 const showNewBest = computed(() => hud.value.newBest || props.board?.newBest === true)
-// Fanfare erst, wenn der Server die Bestzeit bestätigt (lokal spielt sie das Spiel selbst)
+// Fanfare erst, wenn der Server die Bestzeit oder den First clear bestätigt (lokal spielt sie das Spiel selbst);
+// gleicher Sound, und nur einmal, wenn beides zugleich eintritt
 watch(
-  () => props.board?.newBest,
+  () => props.board?.newBest === true || props.board?.firstClear === true,
   (v) => {
     if (v) playSfx('newBest')
   },
