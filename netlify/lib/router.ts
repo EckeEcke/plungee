@@ -13,7 +13,7 @@ import {
   uploadLevel,
   type Ctx,
 } from './levels'
-import { weeklyBoard, weeklyInfo, weeklySubmit } from './weekly'
+import { weeklyBoard, weeklyInfo, weeklyReplays, weeklySubmit } from './weekly'
 
 /** Level (≈ 30 KB) plus Replay (läuft in Lauflängen, selten mehr als ein paar KB) */
 const MAX_BODY_CHARS = 200_000
@@ -76,6 +76,8 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
           'netlify-cdn-cache-control': 'public, s-maxage=30, stale-while-revalidate=120',
         })
       }
+      case 'GET /weekly/replays':
+        return json(await weeklyReplays(ctx, url.searchParams.get('player')))
       case 'GET /weekly/board':
         return json(await weeklyBoard(ctx, url.searchParams.get('player')))
       case 'POST /weekly/time':
@@ -108,7 +110,7 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
         await requireAdmin(ctx, req.headers.get('x-admin-token'))
         return json(await adminClearName(ctx, await readBody(req)))
     }
-    const known = ['/ghosts', '/weekly', '/weekly/board', '/weekly/time', '/levels', '/start', '/upload', '/time', '/times', '/admin/pending', '/admin/level', '/admin/review', '/admin/levels', '/admin/weeks', '/admin/times', '/admin/time/delete', '/admin/name/clear', '/admin/firstclear/clear']
+    const known = ['/ghosts', '/weekly', '/weekly/board', '/weekly/replays', '/weekly/time', '/levels', '/start', '/upload', '/time', '/times', '/admin/pending', '/admin/level', '/admin/review', '/admin/levels', '/admin/weeks', '/admin/times', '/admin/time/delete', '/admin/name/clear', '/admin/firstclear/clear']
     return known.includes(path) ? json({ error: 'Method not allowed' }, 405) : json({ error: 'Not found' }, 404)
   } catch (e) {
     if (e instanceof ApiError) return json({ error: e.message }, e.status)

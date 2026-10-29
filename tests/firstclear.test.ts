@@ -105,6 +105,8 @@ describe('First Clear', () => {
     const meta = JSON.parse((await db.mget([K.meta(id)]))[0]!)
     delete meta.creator
     await db.set(K.meta(id), JSON.stringify(meta))
+    // Altes Level: die Zeit des Erstellers steht noch in der Rangliste
+    await db.zadd(K.times(id), 500, pid(1))
     // Der Ersteller (einziger Eintrag) ist kein First Clear
     await call('POST', '/time', { id, playerId: pid(1), replay: FAST })
     expect((await listed(id)).firstClear).toBeNull()
@@ -115,6 +117,7 @@ describe('First Clear', () => {
     const m2 = JSON.parse((await db.mget([K.meta(old)]))[0]!)
     delete m2.creator
     await db.set(K.meta(old), JSON.stringify(m2))
+    await db.zadd(K.times(old), 500, pid(8))
     await db.zadd(K.times(old), 999, pid(9))
     await call('POST', '/time', { id: old, playerId: pid(2), replay: FAST, name: 'Bob' })
     expect((await listed(old)).firstClear).toBeNull()

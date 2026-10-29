@@ -8,12 +8,13 @@ import AdminView from './components/AdminView.vue'
 import LegalView from './components/LegalView.vue'
 import { privacyFromUrl } from './legal'
 import WeeklyView from './components/WeeklyView.vue'
+import RaceView from './components/RaceView.vue'
 import CharacterView from './components/CharacterView.vue'
 import CharacterCanvas from './components/CharacterCanvas.vue'
 import { applyLook, look } from './game/look'
 import SoundIcon from './components/SoundIcon.vue'
 import { audioSettings } from './audio/audio'
-import { ghostSettings, type GhostSpec } from './game/ghost'
+import { GHOST_COLORS, ghostSettings, type GhostSpec } from './game/ghost'
 import {
   fetchGhosts,
   loadName,
@@ -25,13 +26,14 @@ import {
   type OnlineMeta,
   type SubmitResult,
   type WeeklyInfo,
+  type WeeklyRace,
 } from './online/api'
 import type { LevelData } from './sim'
 import { loadProgress, recordResult } from './game/progress'
 import { themeById } from './game/theme'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from './levels'
 
-const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin' | 'privacy'>('menu')
+const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin' | 'privacy' | 'race'>('menu')
 
 /** Gespeicherte Wahl zuerst, sonst die Systemeinstellung (im Webview der Reddit-App erbt sie das Gerät) */
 function initialDark(): boolean {
@@ -108,9 +110,6 @@ function showNotice(text: string): void {
   noticeTimer = setTimeout(() => (notice.value = ''), 4500)
 }
 
-/** Farben der Top-5-Ghosts: kein Rot und kein Gelb (Gefahr, Ziel) */
-const GHOST_COLORS = ['#3A86FF', '#2ECC71', '#9B6BFF', '#FF8A3D', '#1FD1C5']
-
 /** Die Top-5-Ghosts, wenn der Spieler sie eingeschaltet hat. Ein Fehler oder eine lange Wartezeit lassen das Level trotzdem starten. */
 async function ghostsFor(id: string): Promise<GhostSpec[]> {
   if (!ghostSettings.top) return []
@@ -167,7 +166,7 @@ async function post(stillCurrent: () => boolean, send: () => Promise<SubmitResul
     board.value = { status: 'loading' }
     try {
       const r = await send()
-      if (stillCurrent()) board.value = { status: 'ok', improved: r.improved, board: r, nameRejected: r.nameRejected, firstClear: r.firstClear }
+      if (stillCurrent()) board.value = { status: 'ok', improved: r.improved, board: r, nameRejected: r.nameRejected, firstClear: r.firstClear, newBest: r.newBest, ownLevel: r.ownLevel }
     } catch (e) {
       if (stillCurrent()) {
         board.value = { status: 'error', error: e instanceof Error ? e.message : 'Could not send your time' }
@@ -202,6 +201,13 @@ async function onOnlineFinished(res: { ticks: number; deaths: number; replay: st
 // --- Weekly Challenge ---------------------------------------------------------------
 
 const weeklyLevel = ref<WeeklyInfo | null>(null)
+/** Rennen der Top 5 der Vorwoche */
+const weeklyRace = ref<WeeklyRace | null>(null)
+
+function showRace(race: WeeklyRace): void {
+  weeklyRace.value = race
+  screen.value = 'race'
+}
 
 function playWeekly(info: WeeklyInfo): void {
   weeklyLevel.value = info
@@ -260,6 +266,7 @@ const cssVars = computed(() => ({
   '--c1': theme.value.decor[1],
   '--c2': theme.value.decor[2],
   '--c3': theme.value.decor[3],
+  '--decor-shadow': `color-mix(in srgb, ${theme.value.decorShadow} ${Math.round(theme.value.decorShadowAlpha * 100)}%, ${theme.value.bgTop})`,
 }))
 
 const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' : theme.value.solid))
@@ -317,7 +324,20 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
   <CharacterView v-else-if="screen === 'character'" :theme="baseTheme" @exit="screen = 'menu'" />
 
-  <WeeklyView v-else-if="screen === 'weekly'" :theme="theme" @exit="screen = 'menu'" @play="playWeekly" />
+  <RaceView
+    v-else-if="screen === 'race' && weeklyRace"
+    :theme="theme"
+    :race="weeklyRace"
+    @exit="screen = 'weekly'"
+  />
+
+  <WeeklyView
+    v-else-if="screen === 'weekly'"
+    :theme="theme"
+    @exit="screen = 'menu'"
+    @play="playWeekly"
+    @race="showRace"
+  />
 
   <OnlineView v-else-if="screen === 'online'" :theme="theme" @exit="screen = 'menu'" @play="playOnline($event)" />
 
@@ -339,17 +359,17 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
   <main v-else class="menu" :style="{ ...cssVars, '--menu-text': menuText }">
     <svg class="decor" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <polygon points="60,120 110,210 10,210" fill="var(--c0)" opacity="0.5" />
-      <circle cx="330" cy="150" r="34" fill="none" stroke="var(--c2)" stroke-width="10" opacity="0.5" />
-      <path d="M250 330 q15 -22 30 0 t30 0 t30 0 t30 0" fill="none" stroke="var(--c1)" stroke-width="10" stroke-linecap="round" opacity="0.6" />
-      <path d="M30 470 l22 -26 l22 26 l22 -26 l22 26" fill="none" stroke="var(--c3)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.55" />
-      <g fill="var(--c2)" opacity="0.55">
+      <polygon points="60,120 110,210 10,210" fill="color-mix(in srgb, var(--c0) 50%, var(--bg1))" />
+      <circle cx="330" cy="150" r="34" fill="none" stroke="color-mix(in srgb, var(--c2) 50%, var(--bg1))" stroke-width="10" />
+      <path d="M250 330 q15 -22 30 0 t30 0 t30 0 t30 0" fill="none" stroke="color-mix(in srgb, var(--c1) 60%, var(--bg1))" stroke-width="10" stroke-linecap="round" />
+      <path d="M30 470 l22 -26 l22 26 l22 -26 l22 26" fill="none" stroke="color-mix(in srgb, var(--c3) 55%, var(--bg1))" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+      <g fill="color-mix(in srgb, var(--c2) 55%, var(--bg1))">
         <circle cx="300" cy="560" r="6" /><circle cx="324" cy="560" r="6" /><circle cx="348" cy="560" r="6" />
         <circle cx="300" cy="584" r="6" /><circle cx="324" cy="584" r="6" /><circle cx="348" cy="584" r="6" />
       </g>
-      <polygon points="90,640 150,690 90,740" fill="var(--c1)" opacity="0.5" />
-      <rect x="320" y="690" width="44" height="44" rx="10" fill="var(--c0)" opacity="0.45" transform="rotate(14 342 712)" />
-      <path d="M200 20 v40 M180 40 h40" stroke="var(--c3)" stroke-width="10" stroke-linecap="round" opacity="0.5" />
+      <polygon points="90,640 150,690 90,740" fill="color-mix(in srgb, var(--c1) 50%, var(--bg1))" />
+      <rect x="320" y="690" width="44" height="44" rx="10" fill="color-mix(in srgb, var(--c0) 45%, var(--bg1))" transform="rotate(14 342 712)" />
+      <path d="M200 20 v40 M180 40 h40" stroke="color-mix(in srgb, var(--c3) 50%, var(--bg1))" stroke-width="10" stroke-linecap="round" />
     </svg>
 
     <div class="content">
@@ -482,6 +502,8 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
   width: 100%;
   height: 100%;
   pointer-events: none;
+  /* Neo-Brutal: harter Schatten, die Formen sind deckend */
+  filter: drop-shadow(5px 5px 0 var(--decor-shadow));
 }
 
 .content {

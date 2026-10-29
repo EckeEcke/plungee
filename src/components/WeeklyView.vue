@@ -3,10 +3,28 @@ import PageShell from './PageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Theme } from '../game/theme'
 import { formatTicks } from '../sim'
-import { fetchWeekly, fetchWeeklyBoard, loadName, nameProblem, saveName, type WeeklyBoard, type WeeklyInfo } from '../online/api'
+import { fetchWeekly, fetchWeeklyBoard, fetchWeeklyRace, loadName, nameProblem, saveName, type WeeklyBoard, type WeeklyInfo, type WeeklyRace } from '../online/api'
 
 const props = defineProps<{ theme: Theme }>()
-const emit = defineEmits<{ exit: []; play: [info: WeeklyInfo] }>()
+const emit = defineEmits<{ exit: []; play: [info: WeeklyInfo]; race: [race: WeeklyRace] }>()
+const raceBusy = ref(false)
+const raceError = ref('')
+
+/** Das Rennen der Top 5 der Vorwoche laden und öffnen */
+async function watchRace(): Promise<void> {
+  if (raceBusy.value) return
+  raceBusy.value = true
+  raceError.value = ''
+  try {
+    const r = await fetchWeeklyRace()
+    if (r) emit('race', r)
+    else raceError.value = 'No replays to show for last week.'
+  } catch (e) {
+    raceError.value = e instanceof Error ? e.message : 'Could not load the race'
+  } finally {
+    raceBusy.value = false
+  }
+}
 
 const info = ref<WeeklyInfo | null>(null)
 const board = ref<WeeklyBoard | null>(null)
@@ -112,6 +130,10 @@ function onName(e: Event): void {
                 <span class="t">{{ formatTicks(r.ticks) }}</span>
               </li>
             </ol>
+            <button class="race" type="button" :disabled="raceBusy" @click="watchRace">
+              {{ raceBusy ? 'Loading …' : '▶ Watch the top 5 race' }}
+            </button>
+            <p v-if="raceError" class="race-err">{{ raceError }}</p>
           </section>
 
         </template>
@@ -289,6 +311,34 @@ function onName(e: Event): void {
 
 .rows .t {
   font-variant-numeric: tabular-nums;
+}
+
+.race {
+  display: block;
+  margin: 12px auto 2px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  padding: 8px 18px;
+  color: var(--outline);
+  background: var(--accent);
+  border: 3px solid var(--outline);
+  border-radius: 14px;
+  box-shadow: 3px 3px 0 var(--outline);
+}
+
+.race:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.race-err {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 .empty {

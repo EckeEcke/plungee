@@ -44,11 +44,12 @@ beforeEach(() => {
 describe('GET /ghosts', () => {
   it('liefert die Replays der Top 5 mit Rang, Name und Zeit, ohne Spieler-IDs', async () => {
     const id = await approved()
+    await call('POST', '/time', { id, playerId: pid(3), replay: FAST, name: 'Cara' })
     await call('POST', '/time', { id, playerId: pid(2), replay: SLOW, name: 'Bob' })
     const r = await call('GET', `/ghosts?id=${id}&player=${pid(2)}`)
     expect(r.status).toBe(200)
     expect(r.body.entries.map((e: any) => [e.rank, e.name, e.replay, e.you])).toEqual([
-      [1, 'Alice', FAST, false],
+      [1, 'Cara', FAST, false],
       [2, 'Bob', SLOW, true],
     ])
     expect(r.body.entries[1].ticks).toBeGreaterThan(r.body.entries[0].ticks)
@@ -69,10 +70,11 @@ describe('GET /ghosts', () => {
 
   it('Einträge ohne Replay fehlen, etwa nach einem Admin-Löschen nachgerückte', async () => {
     const id = await approved()
+    await call('POST', '/time', { id, playerId: pid(3), replay: FAST, name: 'Cara' })
     await call('POST', '/time', { id, playerId: pid(2), replay: SLOW, name: 'Bob' })
     await db.del(K.replay(id, pid(2)))
     const r = await call('GET', `/ghosts?id=${id}`)
-    expect(r.body.entries.map((e: any) => e.name)).toEqual(['Alice'])
+    expect(r.body.entries.map((e: any) => e.name)).toEqual(['Cara'])
   })
 
   it('nur freigegebene Level; ungültige IDs', async () => {

@@ -90,9 +90,43 @@ function heart(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number)
   ctx.closePath()
 }
 
+interface PatternElement {
+  x: number
+  y: number
+  size: number
+}
+
+const HEART_PATTERN: PatternElement[] = [
+  { x: -4.0, y: -9.8, size: 1.5 },
+  { x: 2.9, y: -9.8, size: 1.8 },
+  { x: -4.1, y: -3.0, size: 1.4 },
+  { x: 0.0, y: -4.0, size: 1.65 },
+  { x: 3.9, y: -2.6, size: 2.15 },
+]
+
+const DOT_PATTERN: PatternElement[] = [
+  { x: -4.0, y: -9.8, size: 1.0 },
+  { x: 0.0, y: -10.2, size: 0.75 },
+  { x: 4.0, y: -9.5, size: 1.15 },
+  { x: -4.5, y: -4.0, size: 1.15 },
+  { x: -1.0, y: -5.0, size: 0.85 },
+  { x: 2.1, y: -4.1, size: 1.35 },
+  { x: 4.2, y: -1.0, size: 0.9 },
+  { x: 0.0, y: -1.5, size: 1.1 },
+]
+
+const STAR_PATTERN: PatternElement[] = [
+  { x: -4.0, y: -9.8, size: 1.1 },
+  { x: 2.9, y: -9.7, size: 1.2 },
+  { x: -3.0, y: -2.5, size: 1.3 },
+  { x: 1.0, y: -5.0, size: 1.65 },
+  { x: 3.9, y: -1.7, size: 1.15 },
+
+]
+
 /**
  * Muster auf dem Körper (unter Kontur, Glanz und Augen). Wird auf die Körperform beschnitten, die Kontur deckt den Rand.
- * Stern, Herz und Punkt sitzen in drei Reihen und lassen die Augenzone weitgehend frei.
+ * Stern, Herz und Punkt sitzen asymmetrisch verteilt und lassen die Augenzone weitgehend frei.
  */
 function drawPattern(ctx: CanvasRenderingContext2D, th: CharacterColors, look: Look): void {
   if (look.pattern === 'none') return
@@ -102,29 +136,40 @@ function drawPattern(ctx: CanvasRenderingContext2D, th: CharacterColors, look: L
   ctx.clip()
   ctx.fillStyle = pc.hex ?? th.outline
   ctx.beginPath()
+
   if (look.pattern === 'stripes') {
     for (let y = -12 + 1; y < 0; y += 3) ctx.rect(-6, y, 12, 1.4)
   } else if (look.pattern === 'checks') {
     // 4 × 4 Felder à 3 Einheiten
     for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) ctx.rect(-6 + i * 3, -12 + j * 3, 3, 3)
   } else {
-    // Drei Reihen, die Augenzone (Mitte) bleibt weitgehend frei: oben und unten je drei, dazwischen nur die Ränder
-    const rows: Array<[number, number[]]> = [
-      [-10.4, [-4, 0, 4]],
-      [-6.6, [-6, -2, 2, 6]],
-      [-2.8, [-4, 0, 4]],
-    ]
-    for (const [y, xs] of rows) {
-      for (const x of xs) {
-        if (look.pattern === 'dots') {
-          ctx.moveTo(x + 0.85, y)
-          ctx.arc(x, y, 0.85, 0, TAU)
-        } else if (look.pattern === 'stars') star(ctx, x, y, 1.45)
-        else heart(ctx, x, y, 1.3)
+    const elements =
+      look.pattern === 'dots'
+        ? DOT_PATTERN
+        : look.pattern === 'stars'
+          ? STAR_PATTERN
+          : HEART_PATTERN
+
+    for (const { x, y, size } of elements) {
+      if (look.pattern === 'dots') {
+        ctx.moveTo(x + size, y)
+        ctx.arc(x, y, size, 0, TAU)
+      } else if (look.pattern === 'stars') {
+        star(ctx, x, y, size * 1.45)
+      } else {
+        heart(ctx, x, y, size)
       }
     }
   }
-  ctx.fill()
+
+   ctx.fill()
+
+  ctx.strokeStyle = th.outline
+  ctx.lineWidth = 0.5
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+  ctx.stroke()
+
   ctx.restore()
 }
 

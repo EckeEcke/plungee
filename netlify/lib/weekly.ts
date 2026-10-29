@@ -1,6 +1,6 @@
 import campaignJson from '../generated/campaign.json'
 import { ApiError } from './errors'
-import { boardOf, cleanName, K, LIMITS, playerId, PLAYER_RE, rateLimit, verifyReplay, type Ctx } from './levels'
+import { beatsBest, boardOf, chosenName, K, LIMITS, playerId, PLAYER_RE, rateLimit, verifyReplay, type Ctx } from './levels'
 import type { LevelData } from '../../src/sim'
 
 /**
@@ -135,11 +135,34 @@ export async function weeklyBoard(ctx: Ctx, pidRaw: unknown) {
   }
 }
 
+/**
+ * Die Top 5 der VORIGEN Woche mit Replays und Level (für das Rennen in der App). Die laufende Woche gibt es nie heraus:
+ * Wer noch mitspielt, soll die Linien der anderen nicht abschauen können. Drei Befehle.
+ */
+export async function weeklyReplays(ctx: Ctx, pidRaw: unknown) {
+  const { db } = ctx
+  const week = weekOf(ctx.now())
+  const pid = typeof pidRaw === 'string' && PLAYER_RE.test(pidRaw) ? pidRaw : null
+  const none = { week: week.previousId, title: null, data: null, entries: [] as never[] }
+  const key = (await db.mget([K.weekLevel(week.previousId)]))[0]
+  const level = key ? poolOf(ctx).find((l) => l.key === key) : undefined
+  if (!level) return none
+  const top = await db.zrange(K.weekTimes(week.previousId), 0, LIMITS.topTimes - 1)
+  if (top.length === 0) return none
+  const raw = await db.mget([...top.map((t) => K.name(t.member)), ...top.map((t) => K.weekReplay(week.previousId, t.member))])
+  const entries = top.flatMap((t, i) => {
+    const replay = raw[top.length + i]
+    return replay ? [{ rank: i + 1, name: raw[i] ?? 'Anonymous', ticks: t.score, replay, you: t.member === pid }] : []
+  })
+  if (entries.length === 0) return none
+  return { week: week.previousId, title: level.title, data: level.data, entries }
+}
+
 export async function weeklySubmit(ctx: Ctx, body: Record<string, unknown>) {
   const { db } = ctx
   await rateLimit(ctx, 'time', LIMITS.timesPerHour, 3600)
   const pid = playerId(body.playerId)
-  const name = cleanName(body.name)
+  const { name, rejected } = chosenName(ctx, body.name)
   const week = weekOf(ctx.now())
   const level = await levelOfWeek(ctx, week)
 
@@ -157,5 +180,7 @@ export async function weeklySubmit(ctx: Ctx, body: Record<string, unknown>) {
     }
   }
   if (name) await db.set(K.name(pid), name)
-  return { ticks, improved, ...(await boardOf(ctx, times, pid)) }
+  const board = await boardOf(ctx, times, pid)
+  // Die allererste Zeit der Woche schlägt niemanden: kein „New best“
+  return { ticks, improved, newBest: beatsBest(improved, ticks, board, false), ...(rejected ? { nameRejected: true } : {}), ...board }
 }

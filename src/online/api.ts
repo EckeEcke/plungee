@@ -39,11 +39,15 @@ export interface BoardState {
   nameRejected?: boolean
   /** Der Spieler hat das Level als Erster geschafft */
   firstClear?: boolean
+  /** Die Zeit hat die bisherige Bestzeit des Levels geschlagen (vom Server) */
+  newBest?: boolean
+  /** Der Spieler hat das Level selbst erstellt: seine Zeit zählt nicht */
+  ownLevel?: boolean
   board?: Board
 }
 
 /** nameRejected: der Server hat den Namen abgelehnt (die Zeit zählt trotzdem) */
-export type SubmitResult = Board & { ticks: number; improved: boolean; nameRejected?: boolean; firstClear?: boolean }
+export type SubmitResult = Board & { ticks: number; improved: boolean; newBest?: boolean; ownLevel?: boolean; nameRejected?: boolean; firstClear?: boolean }
 export type LevelSort = 'new' | 'plays'
 
 export class OnlineError extends Error {
@@ -181,6 +185,22 @@ export interface LastWeek extends Board {
 }
 
 export type WeeklyBoard = Board & { week: string; lastWeek: LastWeek | null }
+
+export interface WeeklyRace {
+  /** Montag der Woche, z. B. 2026-10-26 */
+  week: string
+  title: string
+  data: LevelData
+  entries: GhostEntry[]
+}
+
+/** Die Top 5 der Vorwoche mit Replays; null, wenn es nichts zu zeigen gibt */
+export async function fetchWeeklyRace(): Promise<WeeklyRace | null> {
+  const r = await call<{ week: string; title: string | null; data: LevelData | null; entries: GhostEntry[] }>(
+    `/weekly/replays?player=${playerId()}`,
+  )
+  return r.title && r.data && r.entries.length > 0 ? { week: r.week, title: r.title, data: r.data, entries: r.entries } : null
+}
 
 export const fetchWeekly = () => call<WeeklyInfo>('/weekly')
 

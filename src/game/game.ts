@@ -39,6 +39,8 @@ export interface HudState {
   newBest: boolean
   /** Nur nach dem Ziel: kodierte Eingaben des Laufs */
   replay: string
+  /** Zuschauermodus: Fortschritt und Zielzeit jedes Läufers (sonst leer) */
+  race: Array<{ progress: number; finishTick: number | null }>
 }
 
 const STEP_MS = DT * 1000
@@ -76,6 +78,8 @@ export class Game {
   /** Eigener Ghost der Bestzeit (nur wenn eingeschaltet und vorhanden) */
   private selfGhost: Ghost | null = null
   private otherGhosts: Ghost[] = []
+  /** Zuschauermodus: Eingaben des Führenden, die statt der Tastatur die Kamera-Welt steuern */
+  private spectator: Int8Array | null = null
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -123,8 +127,20 @@ export class Game {
     for (const g of this.otherGhosts) g.reset()
   }
 
+  /**
+   * Zuschauermodus für das Rennen der Top 5: Alle Replays laufen als deckende Figuren, die Kamera folgt dem ersten.
+   * Bestzeiten und Ghosts des Browsers bleiben unberührt. Gibt false zurück, wenn kein Replay brauchbar war.
+   */
+  spectate(specs: GhostSpec[]): boolean {
+    this.otherGhosts = specs.flatMap((s) => makeGhost(this.level, { ...s, solid: true }) ?? [])
+    this.spectator = this.otherGhosts.length > 0 ? this.otherGhosts[0].inputs : null
+    this.renderer.hidePlayer = this.spectator !== null
+    return this.spectator !== null
+  }
+
   /** Alle Ghosts, die gerade laufen sollen */
   private activeGhosts(): Ghost[] {
+    if (this.spectator) return this.otherGhosts
     return [...(ghostSettings.self && this.selfGhost ? [this.selfGhost] : []), ...this.otherGhosts]
   }
 
@@ -215,11 +231,12 @@ export class Game {
       this.acc += dtMs
       while (this.acc >= STEP_MS && this.status === 'running') {
         this.acc -= STEP_MS
-        const dir: InputDir = this.input.dir
-        if (this.inputCount < MAX_REPLAY_TICKS) this.inputs[this.inputCount++] = dir
+        const dir: InputDir = this.spectator ? ((this.spectator[this.world.tick] ?? 0) as InputDir) : this.input.dir
+        if (!this.spectator && this.inputCount < MAX_REPLAY_TICKS) this.inputs[this.inputCount++] = dir
         this.world.step(dir)
         for (const g of ghosts) g.step()
-        if (this.world.finished) this.finish()
+        // Zuschauer: erst wenn alle im Ziel sind (der Führende ist es zuerst)
+        if (this.spectator ? this.world.finished && ghosts.every((g) => g.world.finished) : this.world.finished) this.finish()
       }
       if (this.status === 'running') this.ambientSounds()
       this.emitHud()
@@ -231,10 +248,16 @@ export class Game {
 
   private finish(): void {
     this.status = 'finished'
+    if (this.spectator) {
+      stopAllLoops()
+      this.emitHud()
+      return
+    }
     this.replay = encodeInputs(this.inputs.subarray(0, this.inputCount))
     const t = this.world.finishTick
     if (this.bestTicks === null || t < this.bestTicks) {
-      this.newBest = true
+      // „New best“ zeigt in Online-Leveln und der Weekly der Server (Bestzeit des Levels), nur sonst die eigene Bestzeit
+      this.newBest = !this.rankedLevel()
       this.bestTicks = t
       this.writeBest(t)
       // Neue Bestzeit: Replay merken, der Ghost beim nächsten Versuch ist dieser Lauf
@@ -299,7 +322,13 @@ export class Game {
       bestTicks: this.bestTicks,
       newBest: this.newBest,
       replay: this.replay,
+      race: this.spectator ? this.otherGhosts.map((g) => ({ progress: g.progress, finishTick: g.finishTick })) : [],
     })
+  }
+
+  /** Online-Level und Weekly: dort zählt die Bestzeit aller, nicht die eigene */
+  private rankedLevel(): boolean {
+    return this.levelKey.startsWith('online:') || this.levelKey.startsWith('weekly:')
   }
 
   private storageKey(): string {

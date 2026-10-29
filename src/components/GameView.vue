@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { audioSettings, startMusic, stopMusic, toggleAllSound } from '../audio/audio'
+import { audioSettings, playSfx, startMusic, stopMusic, toggleAllSound } from '../audio/audio'
 import SoundIcon from './SoundIcon.vue'
 import { consumeControlsHint } from '../game/hintSeen'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -52,6 +52,7 @@ const hud = shallowRef<HudState>({
   bestTicks: null,
   newBest: false,
   replay: '',
+  race: [],
 })
 let game: Game | null = null
 
@@ -70,6 +71,15 @@ const cssVars = computed(() => ({
 }))
 
 const timeText = computed(() => formatTicks(hud.value.ticks))
+/** Eigene Bestzeit im Spiel, bei Online-Leveln und der Weekly die Bestzeit des Levels laut Server */
+const showNewBest = computed(() => hud.value.newBest || props.board?.newBest === true)
+// Fanfare erst, wenn der Server die Bestzeit bestätigt (lokal spielt sie das Spiel selbst)
+watch(
+  () => props.board?.newBest,
+  (v) => {
+    if (v) playSfx('newBest')
+  },
+)
 const bestText = computed(() => (hud.value.bestTicks === null ? '–' : formatTicks(hud.value.bestTicks)))
 const medal = computed(() =>
   hud.value.status === 'finished' ? medalFor(hud.value.ticks, hud.value.deaths, props.par) : null,
@@ -223,11 +233,11 @@ function restart(): void {
           <div class="row">
             <span>Deaths</span><b>{{ hud.deaths }}</b>
           </div>
-          <div class="row" :class="{ 'row-best': hud.newBest }">
+          <div class="row" :class="{ 'row-best': showNewBest }">
             <span>Best</span><b>{{ bestText }}</b>
           </div>
-          <div v-if="hud.newBest || board?.firstClear" class="badges">
-            <div v-if="hud.newBest" class="badge">
+          <div v-if="showNewBest || board?.firstClear" class="badges">
+            <div v-if="showNewBest" class="badge">
               <i v-for="n in 8" :key="n" class="spark" :style="{ '--a': n * 45 + 'deg' }" aria-hidden="true" />
               <span class="badge-text">★ New best!</span>
             </div>
@@ -263,7 +273,8 @@ function restart(): void {
             <p v-else-if="board.status === 'error'" class="board-note err">{{ board.error }}</p>
             <template v-else-if="board.board">
               <p v-if="board.nameRejected" class="board-note err">Your name was not accepted, so you appear as Anonymous.</p>
-              <p v-if="board.improved === false" class="board-note">Your best time on this level is faster.</p>
+              <p v-if="board.ownLevel" class="board-note">This is your own level, so your time is not counted.</p>
+              <p v-else-if="board.improved === false" class="board-note">Your best time on this level is faster.</p>
               <ol class="board-list">
                 <li v-for="r in board.board.top" :key="r.rank" :class="{ you: r.you }">
                   <span class="n">{{ r.rank }}</span>

@@ -12,6 +12,9 @@ export interface Theme {
   frame: string
   decor: string[]
   decorAlpha: number
+  /** Harter Schatten der Hintergrundformen (Farbe und Deckkraft) */
+  decorShadow: string
+  decorShadowAlpha: number
   solid: string
   solidTop: string
   solidShade: string
@@ -46,6 +49,8 @@ export const MEMPHIS_LIGHT: Theme = {
   frame: '#FFD23F',
   decor: ['#3A86FF', '#FFD23F', '#FF5FA2', '#1FD1C5'],
   decorAlpha: 0.32,
+  decorShadow: '#1E1647',
+  decorShadowAlpha: 0.6,
   solid: '#3A2E7A',
   solidTop: '#6C5CE7',
   solidShade: '#2A2060',
@@ -78,6 +83,8 @@ export const MEMPHIS_DARK: Theme = {
   frame: '#FF3EC8',
   decor: ['#00E5FF', '#FF3EC8', '#FFE14D', '#7B5CFF'],
   decorAlpha: 0.34,
+  decorShadow: '#000000',
+  decorShadowAlpha: 0.95,
   solid: '#4A2C8A',
   solidTop: '#8A6BFF',
   solidShade: '#341C66',

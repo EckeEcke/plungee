@@ -36,7 +36,7 @@ import { EditorController } from '../editor/controller'
 import { EditorDoc } from '../editor/doc'
 import { levelHash } from '../editor/hash'
 import { verifyRun, type RunProof } from '../editor/share'
-import { loadName, saveName, uploadLevel } from '../online/api'
+import { loadName, nameProblem, saveName, uploadLevel } from '../online/api'
 import { loadDraft, saveDraft } from '../editor/storage'
 import { levelFnName, levelToTs } from '../editor/tscode'
 import type { Theme } from '../game/theme'
@@ -324,13 +324,21 @@ const uploading = ref(false)
 const authorName = ref(loadName())
 /** Hashes, die in dieser Sitzung schon hochgeladen wurden (der Server lehnt Doppelte ohnehin ab) */
 const uploadedHashes = new Set<string>()
-const titleOk = computed(() => {
+const titleLengthOk = computed(() => {
   void uiVersion.value
   const n = doc.title.trim().length
   return n >= 3 && n <= 32
 })
+const titleBad = computed(() => {
+  void uiVersion.value
+  return nameProblem(doc.title) ? 'This title is not allowed.' : null
+})
+const authorBad = computed(() => nameProblem(authorName.value))
+const titleOk = computed(() => titleLengthOk.value && !titleBad.value)
 const alreadyUploaded = computed(() => uploadedHashes.has(hash.value))
-const canUpload = computed(() => verified.value && titleOk.value && !uploading.value && !alreadyUploaded.value)
+const canUpload = computed(
+  () => verified.value && titleOk.value && !authorBad.value && !uploading.value && !alreadyUploaded.value,
+)
 
 function onAuthor(e: Event): void {
   authorName.value = (e.target as HTMLInputElement).value.slice(0, 16)
@@ -865,7 +873,9 @@ onBeforeUnmount(() => {
             Your name (shown as author)
             <input type="text" maxlength="16" placeholder="Anonymous" :value="authorName" @input="onAuthor" />
           </label>
-          <p v-if="verified && !titleOk" class="note">Give your level a name of 3–32 characters first (field at the top of this menu).</p>
+          <p v-if="authorBad" class="note">{{ authorBad }}</p>
+          <p v-if="verified && titleBad" class="note">{{ titleBad }}</p>
+          <p v-else-if="verified && !titleOk" class="note">Give your level a name of 3–32 characters first (field at the top of this menu).</p>
           <button class="cta" type="button" :disabled="!canUpload" @click="upload">
             {{ uploading ? 'Uploading …' : alreadyUploaded ? '✓ Uploaded' : 'Upload for review' }}
           </button>

@@ -77,12 +77,16 @@ describe('Upload', () => {
     expect(pending.body.levels[0]).toMatchObject({ title: 'Test Level', author: 'Alice', status: 'pending', simVersion: 1 })
   })
 
-  it('die Zeit des Erstellers steht schon in der Rangliste, sobald freigegeben', async () => {
+  it('die Zeit des Erstellers kommt nicht in die Rangliste, und er kann dort keine Zeit aufstellen', async () => {
     const id = await approved()
     const t = await call('GET', `/times?id=${id}&player=${ALICE}`)
-    expect(t.body.top).toHaveLength(1)
-    expect(t.body.top[0]).toMatchObject({ rank: 1, name: 'Alice', you: true })
-    expect(t.body.rank).toBe(1)
+    expect(t.body.top).toHaveLength(0)
+    expect(t.body.rank).toBeNull()
+    expect(db.has(K.replay(id, ALICE))).toBe(false)
+    const own = await call('POST', '/time', { id, playerId: ALICE, replay: FAST, name: 'Alice' })
+    expect(own.status).toBe(200)
+    expect(own.body).toMatchObject({ improved: false, ownLevel: true, newBest: false, rank: null, total: 0 })
+    expect((await call('GET', `/times?id=${id}`)).body.top).toHaveLength(0)
   })
 
   it('lehnt ungültige Level, unfertige Replays und schlechte Titel ab', async () => {
@@ -261,11 +265,8 @@ describe('Bestzeiten', () => {
 
     const bob = await call('POST', '/time', { id, playerId: BOB, name: 'Bob', replay: SLOW })
     expect(bob.status).toBe(200)
-    expect(bob.body).toMatchObject({ ticks: slow, improved: true, rank: 2, total: 2 })
-    expect(bob.body.top.map((t: any) => [t.name, t.ticks, t.you])).toEqual([
-      ['Alice', slow, false],
-      ['Bob', slow, true],
-    ])
+    expect(bob.body).toMatchObject({ ticks: slow, improved: true, rank: 1, total: 1 })
+    expect(bob.body.top.map((t: any) => [t.name, t.ticks, t.you])).toEqual([['Bob', slow, true]])
 
     const better = await call('POST', '/time', { id, playerId: BOB, replay: FAST })
     expect(better.body).toMatchObject({ ticks: fast, improved: true, rank: 1 })
@@ -340,19 +341,18 @@ describe('Replays nur für die Top 5', () => {
   const pid = (n: number) => `p${n}`.padEnd(16, 'x')
 
   it('wer aus den Top 5 fällt, verliert sein Replay; angezeigt werden nur 5 Plätze', async () => {
-    const id = await approved({ replay: SLOW }) // Alice: Platz 1
+    const id = await approved({ replay: SLOW })
     for (let n = 1; n <= 3; n++) await call('POST', '/time', { id, playerId: pid(n), replay: SLOW })
-    // 4 Spieler, alle gleich schnell: Gleichstand wird nach Spieler-ID geordnet
-    const slowPlayers = [ALICE, pid(1), pid(2), pid(3)]
+    // Gleichstand wird nach Spieler-ID geordnet
+    const slowPlayers = [pid(1), pid(2), pid(3)]
     for (const p of slowPlayers) expect(db.has(K.replay(id, p)), p).toBe(true)
 
-    const fifth = await call('POST', '/time', { id, playerId: pid(4), replay: SLOW })
-    expect(fifth.body.top).toHaveLength(5)
-    const sixth = await call('POST', '/time', { id, playerId: pid(5), replay: SLOW })
+    for (const n of [4, 5]) await call('POST', '/time', { id, playerId: pid(n), replay: SLOW })
+    const sixth = await call('POST', '/time', { id, playerId: pid(6), replay: SLOW })
     expect(sixth.body.top).toHaveLength(5)
     expect(sixth.body.total).toBe(6)
 
-    const stored = [ALICE, ...[1, 2, 3, 4, 5].map(pid)].filter((p) => db.has(K.replay(id, p)))
+    const stored = [1, 2, 3, 4, 5, 6].map(pid).filter((p) => db.has(K.replay(id, p)))
     expect(stored).toHaveLength(5)
 
     // Ein schnellerer Spieler rückt auf Platz 1: der bisherige Fünfte verliert sein Replay
@@ -365,13 +365,13 @@ describe('Replays nur für die Top 5', () => {
     expect(db.has(K.replay(id, BOB))).toBe(true)
     expect(db.has(K.replay(id, fifthPlace))).toBe(false)
     expect(db.has(K.replay(id, sixthPlace))).toBe(false)
-    const withReplay = [ALICE, BOB, ...[1, 2, 3, 4, 5].map(pid)].filter((p) => db.has(K.replay(id, p)))
+    const withReplay = [BOB, ...[1, 2, 3, 4, 5, 6].map(pid)].filter((p) => db.has(K.replay(id, p)))
     expect(withReplay).toHaveLength(5)
   })
 
   it('wer außerhalb der Top 5 landet, bekommt kein Replay, der eigene Rang steht trotzdem in der Antwort', async () => {
     const id = await approved({ replay: FAST })
-    for (let n = 1; n <= 5; n++) await call('POST', '/time', { id, playerId: pid(n), replay: FAST })
+    for (let n = 1; n <= 6; n++) await call('POST', '/time', { id, playerId: pid(n), replay: FAST })
     const late = await call('POST', '/time', { id, playerId: BOB, replay: SLOW })
     expect(late.body).toMatchObject({ improved: true, rank: 7, total: 7 })
     expect(late.body.top).toHaveLength(5)

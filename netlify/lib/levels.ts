@@ -210,7 +210,7 @@ export async function uploadLevel(ctx: Ctx, body: Record<string, unknown>) {
   if (errors.length > 0) throw new ApiError(400, errors[0])
   const data: LevelData = { v: 1, size: raw.size, tiles: raw.tiles, entities: raw.entities }
   // Beweis, dass das Level lösbar ist: Das Replay des Erstellers muss es abschließen
-  const ticks = verifyReplay(data, body.replay)
+  verifyReplay(data, body.replay)
 
   const id = newId()
   const hash = levelHash(data)
@@ -221,9 +221,7 @@ export async function uploadLevel(ctx: Ctx, body: Record<string, unknown>) {
   await db.set(K.level(id), JSON.stringify(data))
   await db.set(K.meta(id), JSON.stringify(meta))
   await db.zadd(K.pending, createdAt, id)
-  // Die Zeit des Erstellers ist der erste Eintrag in der Rangliste
-  await db.zadd(K.times(id), ticks, pid)
-  await db.set(K.replay(id, pid), String(body.replay))
+  // Das Replay war nur der Beweis der Lösbarkeit: Die Zeit des Erstellers kommt nicht in die Rangliste
   if (cleanName(body.author)) await db.set(K.name(pid), author)
   return { id, status: 'pending' as const }
 }
@@ -333,6 +331,21 @@ export async function levelGhosts(ctx: Ctx, idRaw: unknown, pidRaw: unknown) {
   return { entries }
 }
 
+/**
+ * „New best“ gibt es nur, wenn die Zeit die bisherige Bestzeit des Levels wirklich schlägt: Platz 1 und der Zweite ist langsamer
+ * (oder niemand sonst hat eine Zeit). Wer als Erster ein Level schafft, ist damit allein noch kein neuer Bestwert.
+ */
+export function beatsBest(
+  improved: boolean,
+  ticks: number,
+  b: { rank: number | null; top: Array<{ ticks: number }> },
+  aloneCounts = true,
+): boolean {
+  if (!improved || b.rank !== 1) return false
+  if (b.top.length < 2) return aloneCounts
+  return b.top[1].ticks > ticks
+}
+
 /** Trägt eine Zeit ein, nachdem der Server das Replay selbst nachgespielt hat */
 export async function submitTime(ctx: Ctx, body: Record<string, unknown>) {
   const { db } = ctx
@@ -345,6 +358,10 @@ export async function submitTime(ctx: Ctx, body: Record<string, unknown>) {
   if (!meta || meta.status !== 'approved' || !rawLevel) throw new ApiError(404, 'Level not found')
 
   const ticks = verifyReplay(JSON.parse(rawLevel) as LevelData, body.replay)
+  // Der Ersteller stellt auf seinem eigenen Level keine Zeiten auf
+  if (meta.creator && meta.creator === pid) {
+    return { ticks, improved: false, newBest: false, ownLevel: true, ...(await leaderboard(ctx, id, pid)) }
+  }
   // Nur solange es noch keinen gibt (also einmal pro Level), sonst kostet es keinen Befehl
   const firstClear = rawFirst ? false : await recordFirstClear(ctx, id, meta, pid, name)
   const improved = await db.zaddIfLower(K.times(id), ticks, pid)
@@ -358,7 +375,15 @@ export async function submitTime(ctx: Ctx, body: Record<string, unknown>) {
     }
   }
   if (name) await db.set(K.name(pid), name)
-  return { ticks, improved, ...(rejected ? { nameRejected: true } : {}), ...(firstClear ? { firstClear: true } : {}), ...(await leaderboard(ctx, id, pid)) }
+  const board = await leaderboard(ctx, id, pid)
+  return {
+    ticks,
+    improved,
+    newBest: beatsBest(improved, ticks, board, false),
+    ...(rejected ? { nameRejected: true } : {}),
+    ...(firstClear ? { firstClear: true } : {}),
+    ...board,
+  }
 }
 
 // --- Admin ---------------------------------------------------------------------------

@@ -14,14 +14,19 @@ export interface GhostSpec {
   label?: string
   /** Körperfarbe; ohne Angabe die Farbe des Spielers */
   color?: string
+  /** Deckend statt blass (Rennen der Top 5) */
+  solid?: boolean
 }
+
+/** Farben der Top-5-Ghosts nach Platz: kein Rot und kein Gelb (Gefahr, Ziel) */
+export const GHOST_COLORS = ['#3A86FF', '#2ECC71', '#9B6BFF', '#FF8A3D', '#1FD1C5']
 
 export class Ghost {
   world: World
 
   constructor(
     private level: CompiledLevel,
-    private inputs: Int8Array,
+    readonly inputs: Int8Array,
     /** Dauer des Laufs in Ticks */
     readonly ticks: number,
     readonly spec: GhostSpec,
@@ -44,6 +49,11 @@ export class Ghost {
   /** Wird gezeichnet, solange er läuft: nicht tot, nicht schon im Ziel */
   get visible(): boolean {
     return !this.world.finished && !this.world.p.dead
+  }
+
+  /** Tick des Ziels, solange er noch läuft null */
+  get finishTick(): number | null {
+    return this.world.finished ? this.world.finishTick : null
   }
 
   /** 0..1, wie weit er im Level ist (für Anzeigen neben dem Bild) */

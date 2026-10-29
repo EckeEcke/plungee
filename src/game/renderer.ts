@@ -46,6 +46,8 @@ import type { Theme } from './theme'
 
 const WRAP = 1000
 const TAU = Math.PI * 2
+/** Versatz des harten Schattens der Hintergrundformen in px */
+const DECOR_SHADOW = 1
 
 interface DecorItem {
   x: number
@@ -113,6 +115,8 @@ export class Renderer {
   private dpr = 1
   viewH = 400
   camY = 0
+  /** Zuschauermodus: der Lauf der "Spielerfigur" ist nur Kamera und Takt, gezeichnet wird er als Ghost */
+  hidePlayer = false
   /** true = Kamera folgt nicht dem Spieler (Editor), camY wird von außen gesetzt */
   freeCamera = false
   /** Platz (CSS-Pixel) für die Bedienleiste oben: die Kamera darf so weit über das Levelende hinaus nach oben, damit die obersten Reihen nicht unter ihr liegen */
@@ -426,72 +430,79 @@ export class Renderer {
   private drawDecor(ctx: CanvasRenderingContext2D): void {
     const th = this.theme
     ctx.save()
-    ctx.globalAlpha = th.decorAlpha
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     for (const d of this.decor) {
       const y = ((((d.y - this.camY * d.f) % WRAP) + WRAP) % WRAP) - 60
       if (y < -40 || y > this.viewH + 40) continue
-      const col = th.decor[d.color % th.decor.length]
-      ctx.save()
-      ctx.translate(d.x, y)
-      ctx.rotate(d.rot)
-      ctx.fillStyle = col
-      ctx.strokeStyle = col
-      ctx.lineWidth = 2.4
-      const s = d.size
-      switch (d.kind) {
-        case 0: // Dreieck
-          ctx.beginPath()
-          ctx.moveTo(0, -s * 0.6)
-          ctx.lineTo(s * 0.6, s * 0.5)
-          ctx.lineTo(-s * 0.6, s * 0.5)
-          ctx.closePath()
-          ctx.fill()
-          break
-        case 1: // Ring
-          ctx.beginPath()
-          ctx.arc(0, 0, s * 0.5, 0, TAU)
-          ctx.stroke()
-          break
-        case 2: // Wellenlinie
-          ctx.beginPath()
-          for (let i = 0; i <= 12; i++) {
-            const px = (i / 12 - 0.5) * s * 1.6
-            const py = Math.sin(i * 1.1) * s * 0.18
-            if (i === 0) ctx.moveTo(px, py)
-            else ctx.lineTo(px, py)
-          }
-          ctx.stroke()
-          break
-        case 3: // Zickzack
-          ctx.beginPath()
-          for (let i = 0; i <= 5; i++) {
-            const px = (i / 5 - 0.5) * s * 1.6
-            const py = (i % 2 === 0 ? -1 : 1) * s * 0.22
-            if (i === 0) ctx.moveTo(px, py)
-            else ctx.lineTo(px, py)
-          }
-          ctx.stroke()
-          break
-        case 4: // Punkte
-          for (let i = 0; i < 3; i++) {
-            for (let j = 0; j < 3; j++) {
-              ctx.beginPath()
-              ctx.arc((i - 1) * s * 0.35, (j - 1) * s * 0.35, s * 0.08, 0, TAU)
-              ctx.fill()
+      // Formen und Schatten sind deckend, ihre Farbe ist schon mit dem Hintergrund an dieser Stelle gemischt:
+      // sonst scheint der Schatten durch die halbtransparente Form
+      const bg = mixHex(th.bgTop, th.bgBottom, Math.min(1, Math.max(0, y / this.viewH)))
+      const col = mixHex(bg, th.decor[d.color % th.decor.length], th.decorAlpha)
+      const shCol = mixHex(bg, th.decorShadow, th.decorShadowAlpha)
+      // Neo-Brutal: harter Schatten in Konturfarbe, immer nach unten rechts (unabhängig von der Drehung der Form)
+      for (const shadow of [true, false]) {
+        ctx.save()
+        ctx.translate(d.x + (shadow ? DECOR_SHADOW : 0), y + (shadow ? DECOR_SHADOW : 0))
+        ctx.rotate(d.rot)
+        ctx.fillStyle = shadow ? shCol : col
+        ctx.strokeStyle = shadow ? shCol : col
+        ctx.lineWidth = 2.4
+        const s = d.size
+        switch (d.kind) {
+          case 0: // Dreieck
+            ctx.beginPath()
+            ctx.moveTo(0, -s * 0.6)
+            ctx.lineTo(s * 0.6, s * 0.5)
+            ctx.lineTo(-s * 0.6, s * 0.5)
+            ctx.closePath()
+            ctx.fill()
+            break
+          case 1: // Ring
+            ctx.beginPath()
+            ctx.arc(0, 0, s * 0.5, 0, TAU)
+            ctx.stroke()
+            break
+          case 2: // Wellenlinie
+            ctx.beginPath()
+            for (let i = 0; i <= 12; i++) {
+              const px = (i / 12 - 0.5) * s * 1.6
+              const py = Math.sin(i * 1.1) * s * 0.18
+              if (i === 0) ctx.moveTo(px, py)
+              else ctx.lineTo(px, py)
             }
-          }
-          break
-        case 5: // Plus
-          ctx.fillRect(-s * 0.1, -s * 0.45, s * 0.2, s * 0.9)
-          ctx.fillRect(-s * 0.45, -s * 0.1, s * 0.9, s * 0.2)
-          break
-        default: // Halbkreis
-          ctx.beginPath()
-          ctx.arc(0, 0, s * 0.5, Math.PI, 0)
-          ctx.closePath()
-          ctx.fill()
+            ctx.stroke()
+            break
+          case 3: // Zickzack
+            ctx.beginPath()
+            for (let i = 0; i <= 5; i++) {
+              const px = (i / 5 - 0.5) * s * 1.6
+              const py = (i % 2 === 0 ? -1 : 1) * s * 0.22
+              if (i === 0) ctx.moveTo(px, py)
+              else ctx.lineTo(px, py)
+            }
+            ctx.stroke()
+            break
+          case 4: // Punkte
+            for (let i = 0; i < 3; i++) {
+              for (let j = 0; j < 3; j++) {
+                ctx.beginPath()
+                ctx.arc((i - 1) * s * 0.35, (j - 1) * s * 0.35, s * 0.08, 0, TAU)
+                ctx.fill()
+              }
+            }
+            break
+          case 5: // Plus
+            ctx.fillRect(-s * 0.1, -s * 0.45, s * 0.2, s * 0.9)
+            ctx.fillRect(-s * 0.45, -s * 0.1, s * 0.9, s * 0.2)
+            break
+          default: // Halbkreis
+            ctx.beginPath()
+            ctx.arc(0, 0, s * 0.5, Math.PI, 0)
+            ctx.closePath()
+            ctx.fill()
+        }
+        ctx.restore()
       }
       ctx.restore()
     }
@@ -1289,7 +1300,7 @@ export class Renderer {
 
       ctx.save()
       ctx.translate(x + PLAYER_W / 2, y + PLAYER_H)
-      ctx.globalAlpha = 0.42
+      ctx.globalAlpha = g.spec.solid ? 0.95 : 0.42
       drawCharacter(ctx, colors, look, {
         face: p.facing * 0.7,
         ox: clamp(p.vx / 110, -1, 1) * 1.1,
@@ -1316,7 +1327,7 @@ export class Renderer {
   private drawPlayer(ctx: CanvasRenderingContext2D, world: World, alpha: number): void {
     const th = this.theme
     const p = world.p
-    if (p.dead) return
+    if (p.dead || this.hidePlayer) return
     const x = world.prevX + (p.x - world.prevX) * alpha
     const y = world.prevY + (p.y - world.prevY) * alpha
 
@@ -1342,6 +1353,17 @@ export class Renderer {
     })
     ctx.restore()
   }
+}
+
+/** Mischt zwei Hex-Farben (t = Anteil von b) */
+function mixHex(a: string, b: string, t: number): string {
+  const x = parseInt(a.replace('#', ''), 16)
+  const z = parseInt(b.replace('#', ''), 16)
+  const c = (shift: number): string =>
+    Math.round(((x >> shift) & 255) * (1 - t) + ((z >> shift) & 255) * t)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${c(16)}${c(8)}${c(0)}`
 }
 
 /** Mischt Schwarz in eine Hex-Farbe (factor < 1 = dunkler) */
