@@ -13,8 +13,8 @@ import {
   PATTERNS,
   randomLook,
 } from '../game/look'
-import { loadName, nameProblem, saveName } from '../online/api'
 import CharacterCanvas from './CharacterCanvas.vue'
+import { loadName, nameProblem, saveName } from '../online/api'
 
 const props = defineProps<{ theme: Theme }>()
 const emit = defineEmits<{ exit: [] }>()
@@ -33,17 +33,16 @@ function onNameInput(event: Event): void {
 }
 
 /**
- * props.theme enthält die gewählte Körperfarbe schon (App.vue wendet sie an).
- * Die Farbfelder brauchen aber das Theme ohne Auswahl, sonst zeigt „Pink“
- * immer die aktuell gewählte Farbe und setzt beim Klick auf Pink zurück.
+ * Die Farbfelder verwenden das Basis-Theme, damit sie unabhängig
+ * von der aktuell gewählten Körperfarbe korrekt dargestellt werden.
  */
 const base = computed(() => themeById(props.theme.id))
 
-/** Vorschau: Basis-Theme mit der gewählten Farbe, genau wie im Spiel */
+/** Vorschau mit der aktuell gewählten Farbe und dem Look. */
 const themed = computed(() => applyLook(base.value, look))
 
 function swatch(id: string): { background: string } {
-  const c = COLORS.find((o) => o.id === id)!
+  const c = COLORS.find(o => o.id === id)!
   const body = c.body ?? base.value.player
   const shade = c.shade ?? base.value.playerShade
 
@@ -52,9 +51,11 @@ function swatch(id: string): { background: string } {
   }
 }
 
-/** Farbfeld für die Musterfarbe; „Dark“ folgt der Konturfarbe des Themes */
+/** Die Musterfarbe "Dark" folgt der Konturfarbe des Themes. */
 function patternSwatch(hex: string | null): { background: string } {
-  return { background: hex ?? base.value.outline }
+  return {
+    background: hex ?? base.value.outline,
+  }
 }
 
 function reset(): void {
@@ -87,15 +88,12 @@ function randomize(): void {
 
       <div class="scroll">
         <div class="col">
-          <section class="stage">
-            <CharacterCanvas
-              :colors="themed"
-              :look="look"
-              :size="168"
-            />
+          <!-- Player name -->
 
+          <section class="name-panel">
             <label class="player-name">
-              <span>Player name</span>
+              <span>PLAYER NAME</span>
+
               <input
                 type="text"
                 maxlength="16"
@@ -114,6 +112,20 @@ function randomize(): void {
               {{ nameError }}
             </p>
           </section>
+
+          <!-- Character preview -->
+
+          <section class="stage">
+            <div class="character-preview">
+              <CharacterCanvas
+                :colors="themed"
+                :look="look"
+                :size="168"
+              />
+            </div>
+          </section>
+
+          <!-- Character options -->
 
           <section class="opts">
             <h3>Color</h3>
@@ -205,6 +217,8 @@ function randomize(): void {
             </div>
           </section>
 
+          <!-- Actions -->
+
           <div class="actions">
             <button
               class="reset"
@@ -237,6 +251,8 @@ function randomize(): void {
   display: flex;
   flex-direction: column;
 }
+
+/* Header */
 
 .top {
   display: flex;
@@ -272,7 +288,7 @@ function randomize(): void {
   color: var(--muted);
 }
 
-/* Content */
+/* Scroll container */
 
 .scroll {
   flex: 1;
@@ -288,19 +304,16 @@ function randomize(): void {
   gap: 14px;
 }
 
+/* Panels */
+
+.name-panel,
 .stage,
 .opts {
+  padding: 14px 16px;
   background: var(--panel);
   border: 3px solid var(--line);
   border-radius: 20px;
   box-shadow: 4px 4px 0 var(--outline);
-  padding: 14px 16px;
-}
-
-.stage {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
 }
 
 /* Player name */
@@ -308,9 +321,10 @@ function randomize(): void {
 .player-name {
   display: grid;
   gap: 6px;
-  width: min(100%, 240px);
+  width: min(100%, 300px);
   font-size: 12px;
   font-weight: 900;
+  letter-spacing: 1px;
   color: var(--muted);
 }
 
@@ -332,6 +346,18 @@ function randomize(): void {
   font-size: 12px;
   font-weight: 700;
   color: var(--accent);
+}
+
+/* Character preview */
+
+.stage {
+  display: grid;
+  justify-items: center;
+}
+
+.character-preview {
+  width: 168px;
+  height: 168px;
 }
 
 /* Option headings */
@@ -424,5 +450,26 @@ h3.disabled {
   background: var(--panel);
   border: 2px solid var(--line);
   border-radius: 999px;
+}
+
+/* Mobile: compact sticky preview */
+
+@media (max-width: 599px) {
+  .stage {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 10px 16px;
+  }
+
+  .character-preview {
+    width: 96px;
+    height: 96px;
+  }
+
+  .character-preview :deep(canvas) {
+    transform: scale(0.57142857);
+    transform-origin: top left;
+  }
 }
 </style>
