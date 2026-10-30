@@ -16,7 +16,7 @@ export default async (request: Request): Promise<Response> => {
     const channel = data.channel_name
     const url = new URL(request.url)
     const id = url.searchParams.get('player_id')
-    if (typeof socket !== 'string' || !/^[0-9]+\.[0-9]+$/.test(socket) || typeof channel !== 'string' || !ROOM.test(channel) || typeof id !== 'string' || !ID.test(id)) return json({ error: 'Invalid auth request' }, 400)
+    if (typeof socket !== 'string' || !/^[0-9]+\.[0-9]+$/.test(socket) || typeof channel !== 'string' || !ROOM.test(channel) || typeof id !== 'string' || !ID.test(id)) return json({ error: 'Invalid auth request' }, 400)    
     const code = channel.slice('presence-plungee-'.length)
     const redis = Redis.fromEnv()
     const host = await redis.get<string>(`plungee:room:${code}:host`)
