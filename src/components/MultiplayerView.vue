@@ -547,5 +547,5 @@ onBeforeUnmount(() => { session?.close() })
 </style>
 
 <style scoped>
-.results-list{list-style:none;margin:0;padding:0;display:grid;gap:9px}.results-list li{display:flex;align-items:center;gap:9px;border:2px solid var(--line);border-radius:12px;padding:10px;color:var(--text);font-weight:800}.results-list li.self{border-color:var(--accent)}.results-list li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.results-list li small{color:var(--muted);font-size:12px}.results-panel>small{color:var(--muted);font-size:12px}
+.results-list{list-style:none;margin:0;padding:0;display:grid;gap:9px}.results-list li{display:flex;align-items:center;gap:9px;border:2px solid var(--line);border-radius:12px;padding:10px;color:var(--text);font-weight:800}.results-list li.self{background:var(--accent);color:var(--outline)}.results-list li.self small{color:var(--outline)}.results-list li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.results-list li small{color:var(--muted);font-size:12px}.results-panel>small{color:var(--muted);font-size:12px}
 </style>
