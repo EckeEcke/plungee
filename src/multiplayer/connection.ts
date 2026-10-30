@@ -25,15 +25,8 @@ export function connectLobby(code: string, playerId: string, name: string, look:
     authEndpoint: `/.netlify/functions/apinator-auth?player_id=${encodeURIComponent(playerId)}&name=${encodeURIComponent(name)}&look=${encodeURIComponent(JSON.stringify(look))}`,
   })
   connection.bind('state_change', (data: unknown) => {
-    if (
-      typeof data === 'object' &&
-      data !== null &&
-      'current' in data &&
-      typeof data.current === 'string'
-    ) {
-      onStatus(data.current)
-    }
-  })  
+    if (data && typeof data === 'object' && 'current' in data && typeof data.current === 'string') onStatus(data.current)
+  })
   connection.connect()
   const channel = connection.subscribe(`presence-plungee-${code}`) as PresenceChannel
   const refresh = () => {
