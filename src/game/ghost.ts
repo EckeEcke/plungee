@@ -48,7 +48,7 @@ export class Ghost {
 
   /** Wird gezeichnet, solange er läuft: nicht tot, nicht schon im Ziel */
   get visible(): boolean {
-    return !this.world.finished && !this.world.p.dead
+    return this.world.tick > 0 && !this.world.finished && !this.world.p.dead
   }
 
   /** Tick des Ziels, solange er noch läuft null */

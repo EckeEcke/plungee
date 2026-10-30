@@ -10,6 +10,7 @@ import { privacyFromUrl } from './legal'
 import WeeklyView from './components/WeeklyView.vue'
 import RaceView from './components/RaceView.vue'
 import CharacterView from './components/CharacterView.vue'
+import MultiplayerView from './components/MultiplayerView.vue'
 import CharacterCanvas from './components/CharacterCanvas.vue'
 import { applyLook, look } from './game/look'
 import SoundIcon from './components/SoundIcon.vue'
@@ -33,7 +34,7 @@ import { loadProgress, recordResult } from './game/progress'
 import { themeById } from './game/theme'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from './levels'
 
-const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin' | 'privacy' | 'race'>('menu')
+const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin' | 'privacy' | 'race' | 'multiplayer'>('menu')
 
 /** Gespeicherte Wahl zuerst, sonst die Systemeinstellung (im Webview der Reddit-App erbt sie das Gerät) */
 function initialDark(): boolean {
@@ -322,6 +323,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     @name="onNameChosen"
   />
 
+  <MultiplayerView v-else-if="screen === 'multiplayer'" @exit="screen = 'menu'" />
   <CharacterView v-else-if="screen === 'character'" :theme="baseTheme" @exit="screen = 'menu'" />
 
   <RaceView
@@ -386,6 +388,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
         <button class="build" type="button" @click="screen = 'online'">Community levels</button>
         <button class="build" type="button" @click="screen = 'edit'">Build a level</button>
         <button class="build" type="button" @click="screen = 'character'">Character</button>
+        <button class="build" type="button" @click="screen = 'multiplayer'">Multiplayer</button>
       </div>
 
       <div class="snd-row">
