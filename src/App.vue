@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import EditorView from './components/EditorView.vue'
@@ -33,6 +34,8 @@ import type { LevelData } from './sim'
 import { loadProgress, recordResult } from './game/progress'
 import { themeById } from './game/theme'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from './levels'
+
+const inviteRoomCode = new URLSearchParams(window.location.search).get('room')
 
 const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin' | 'privacy' | 'race' | 'multiplayer'>('menu')
 
@@ -324,8 +327,18 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     @name="onNameChosen"
   />
 
-  <MultiplayerView v-else-if="screen === 'multiplayer'" :theme="baseTheme" @exit="screen = 'menu'" @edit-character="screen = 'character'" />
-  <CharacterView v-else-if="screen === 'character'" :theme="baseTheme" @exit="screen = new URLSearchParams(location.search).has('room') ? 'multiplayer' : 'menu'" />
+  <MultiplayerView
+    v-else-if="screen === 'multiplayer'"
+    :theme="baseTheme"
+    @exit="screen = 'menu'"
+    @edit-character="screen = 'character'"
+  />
+
+  <CharacterView
+    v-else-if="screen === 'character'"
+    :theme="baseTheme"
+    @exit="screen = inviteRoomCode ? 'multiplayer' : 'menu'"
+  />
 
   <RaceView
     v-else-if="screen === 'race' && weeklyRace"
