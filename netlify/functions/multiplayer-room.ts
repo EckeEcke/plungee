@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { Redis } from '@upstash/redis'
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-const CODE = /^[A-Z2-9]{8}$/
+const CODE = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{5}$/
 const ID = /^[a-f0-9-]{36}$/i
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 const TTL = 7200
@@ -15,7 +15,7 @@ export default async (request: Request): Promise<Response> => {
     const redis = Redis.fromEnv()
     if (action === 'create') {
       for (let attempt = 0; attempt < 5; attempt++) {
-        const bytes = randomBytes(8)
+        const bytes = randomBytes(5)
         const newCode = [...bytes].map(n => ALPHABET[n % ALPHABET.length]).join('')
         const ok = await redis.set(`plungee:room:${newCode}:host`, playerId, { nx: true, ex: TTL })
         if (ok === 'OK') {

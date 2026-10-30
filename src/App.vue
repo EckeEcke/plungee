@@ -235,6 +235,7 @@ onMounted(() => {
   const id = params.get('level')
   const privacy = privacyFromUrl(location.pathname, params)
   if (privacy) screen.value = 'privacy'
+  else if (params.get('room')) screen.value = 'multiplayer'
   else if (params.has('admin')) screen.value = 'admin'
   else if (id) void playOnline(id, 'menu')
   if (privacy) history.replaceState(null, '', '/')
