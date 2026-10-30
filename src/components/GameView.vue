@@ -61,10 +61,13 @@ function cueFinalRoundIntro(): void {
   if (introMs <= 0) return
 
   showFinalRoundIntro.value = true
+  playSfx('hammer')
+
   finalRoundIntroTimer = setTimeout(() => {
     showFinalRoundIntro.value = false
   }, introMs)
 }
+
 const hud = shallowRef<HudState>({
   status: 'ready',
   ticks: 0,

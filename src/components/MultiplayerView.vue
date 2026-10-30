@@ -58,6 +58,8 @@ function clearGameOverIntro(): void {
 function beginGameOverIntro(): void {
   clearGameOverIntro()
   showGameOverIntro.value = true
+  playSfx('hammer')
+
   gameOverTimer = setTimeout(() => {
     showGameOverIntro.value = false
     gameOverTimer = null
