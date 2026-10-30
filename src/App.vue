@@ -324,8 +324,8 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     @name="onNameChosen"
   />
 
-  <MultiplayerView v-else-if="screen === 'multiplayer'" :theme="baseTheme" @exit="screen = 'menu'" />
-  <CharacterView v-else-if="screen === 'character'" :theme="baseTheme" @exit="screen = 'menu'" />
+  <MultiplayerView v-else-if="screen === 'multiplayer'" :theme="baseTheme" @exit="screen = 'menu'" @edit-character="screen = 'character'" />
+  <CharacterView v-else-if="screen === 'character'" :theme="baseTheme" @exit="screen = new URLSearchParams(location.search).has('room') ? 'multiplayer' : 'menu'" />
 
   <RaceView
     v-else-if="screen === 'race' && weeklyRace"

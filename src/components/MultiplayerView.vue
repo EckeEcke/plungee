@@ -8,9 +8,11 @@ import { loadName } from '../online/api'
 import { connectLobby, roomRequest, type LobbyPlayer, type LobbySession } from '../multiplayer/connection'
 
 const props = defineProps<{ theme: Theme }>()
-const emit = defineEmits<{ exit: [] }>()
+const emit = defineEmits<{ exit: []; editCharacter: [] }>()
 const name = ref(loadName() || 'Guest')
-const codeInput = ref(new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '')
+const invitedCode = new URLSearchParams(location.search).get('room')?.toUpperCase() ?? ''
+const hasInvite = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{5}$/.test(invitedCode)
+const codeInput = ref(invitedCode)
 const room = ref('')
 const players = ref<LobbyPlayer[]>([])
 const status = ref('idle')
@@ -73,7 +75,7 @@ onBeforeUnmount(() => { session?.close() })
 
       <div class="scroll">
         <div class="content">
-          <section class="stage" aria-label="Animated multiplayer lobby">
+          <section v-if="room" class="stage" aria-label="Animated multiplayer lobby">
             <div class="stage-top"><span class="stage-label">{{ room ? 'YOUR LOBBY' : 'READY TO PLUNGE?' }}</span><span class="stage-count">{{ room ? players.length : 1 }} / 8</span></div>
             <div class="playfield">
               <div class="track track-one"></div><div class="track track-two"></div>
@@ -92,15 +94,22 @@ onBeforeUnmount(() => { session?.close() })
           </section>
 
           <template v-if="!room">
+            <section class="panel character-panel">
+              <CharacterCanvas :colors="myColors" :look="look" :size="72" />
+              <div class="character-details">
+                <strong>{{ name.trim() || 'Guest' }}</strong>
+                <button class="edit-character" type="button" @click="emit('editCharacter')">Edit character</button>
+              </div>
+            </section>
             <section class="panel name-panel">
               <label class="field"><span>YOUR NAME</span><input v-model="name" maxlength="16" placeholder="Player name" /></label>
             </section>
-            <section class="panel">
+            <section v-if="!hasInvite" class="panel">
               <div class="section-head"><div><b>CREATE A ROOM</b><small>Invite your friends to race</small></div></div>
               <button class="cta" type="button" :disabled="busy" @click="void enter('create')">＋ Create lobby</button>
             </section>
             <section class="panel join-panel">
-              <div class="section-head"><div><b>JOIN A ROOM</b><small>Got an invite code?</small></div></div>
+              <div class="section-head"><div><b>JOIN A ROOM</b><small>{{ hasInvite ? 'You have been invited to a lobby' : 'Got an invite code?' }}</small></div></div>
               <div class="join-row"><input v-model="codeInput" maxlength="5" aria-label="Room code" placeholder="5-CHARACTER CODE" autocapitalize="characters" /><button class="cta" type="button" :disabled="busy || codeInput.trim().length !== 5" @click="void enter('join')">Join →</button></div>
             </section>
           </template>
@@ -131,4 +140,11 @@ onBeforeUnmount(() => { session?.close() })
 .slot-identity small{margin:0;color:var(--accent);font-size:9px}
 .runner-host{font-size:9px;font-weight:900;color:var(--text);background:var(--panel);padding:1px 5px;border-radius:5px}
 @media(max-width:519px){.players-panel{display:none}}
+</style>
+
+<style scoped>
+.character-panel{display:flex;align-items:center;gap:14px}
+.character-details{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.character-details strong{font-size:16px;color:var(--text);overflow-wrap:anywhere}
+.edit-character{font:inherit;font-weight:800;color:var(--text);background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:5px 8px;cursor:pointer}
 </style>
