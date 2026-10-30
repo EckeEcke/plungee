@@ -28,9 +28,8 @@ const props = withDefaults(
     ghosts?: GhostSpec[]
     /** Multiplayer: fester gemeinsamer Start, keine lokalen Restarts oder Bestenlisten. */
     multiplayerStartAt?: number | null
-    multiplayerError?: string
   }>(),
-  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [], multiplayerStartAt: null, multiplayerError: '' },
+  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [], multiplayerStartAt: null },
 )
 const emit = defineEmits<{
   exit: []
@@ -221,7 +220,7 @@ function restart(): void {
       </div>
 
       <div v-if="showHint" class="hint">
-        ◀ ▶ or A / D · or hold left / right side <span v-if="multiplayerStartAt === null">· R = restart</span>
+        ◀ ▶ or A / D · or hold left / right side · R = restart
       </div>
 
       <Transition name="result">
@@ -292,9 +291,7 @@ function restart(): void {
             </template>
             </template>
           </div>
-          <p v-if="multiplayerStartAt !== null" class="board-note" :class="{ err: multiplayerError }">
-            {{ multiplayerError || 'Waiting for the other racers…' }}
-          </p>
+          <p v-if="multiplayerStartAt !== null" class="board-note">Waiting for the other racers…</p>
           <div v-else class="actions">
             <button class="cta" type="button" @click="restart">Retry</button>
             <button class="ghost" type="button" @click="emit('exit')">{{ exitText }}</button>

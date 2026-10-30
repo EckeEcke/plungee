@@ -3,12 +3,17 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import PageShell from './PageShell.vue'
 import GameView from './GameView.vue'
 import { LEVELS } from '../levels'
-import { formatTicks } from '../sim'
+import { compileLevel, decodeInputs, formatTicks, simulate } from '../sim'
 import CharacterCanvas from './CharacterCanvas.vue'
 import { applyLook, look, sanitizeLook } from '../game/look'
 import type { Theme } from '../game/theme'
 import { loadName } from '../online/api'
-import { connectLobby, roomRequest, type LobbyPlayer, type LobbySession, matchRequest, type MatchState, type MatchSettings, type LobbyDifficulty, type LobbyRounds } from '../multiplayer/connection'
+import {
+  connectLobby, createRoom,
+  type LobbyPlayer, type LobbySession, type LobbyEvent,
+  type MatchState, type MatchSettings, type RaceResult,
+  type LobbyDifficulty, type LobbyRounds,
+} from '../multiplayer/connection'
 
 const props = defineProps<{ theme: Theme }>()
 const emit = defineEmits<{ exit: []; editCharacter: [] }>()
@@ -24,11 +29,14 @@ const busy = ref(false)
 const copied = ref(false)
 const playerId = crypto.randomUUID()
 let session: LobbySession | null = null
-let pollTimer: ReturnType<typeof setInterval> | undefined
-const match = ref<MatchState>({ settings: { rounds: 5, difficulty: 'all' }, readyIds: [], started: false, revision: 0, round: null })
+
+const emptyMatch = (): MatchState => ({
+  settings: { rounds: 5, difficulty: 'all' }, readyIds: [],
+  started: false, revision: 0, round: null,
+})
+const match = ref<MatchState>(emptyMatch())
 const namesById = ref<Record<string, string>>({})
 const pendingReplay = ref<string | null>(null)
-let submitting = false
 const raceLevel = computed(() => LEVELS.find(l => l.key === match.value.round?.levelKey))
 const allFinished = computed(() => {
   const r = match.value.round
@@ -38,94 +46,209 @@ const standings = computed(() => {
   const r = match.value.round
   if (!r) return []
   return r.playerIds.map(id => ({ id, name: namesById.value[id] ?? (id === playerId ? name.value : 'Player'), result: r.results[id] }))
-    .sort((a, b) => (a.result?.ticks ?? Infinity) - (b.result?.ticks ?? Infinity) || (a.result?.deaths ?? Infinity) - (b.result?.deaths ?? Infinity))
+    .sort((a, b) => {
+      const ta = a.result?.finished ? a.result.ticks : Infinity
+      const tb = b.result?.finished ? b.result.ticks : Infinity
+      return ta - tb || (a.result?.deaths ?? Infinity) - (b.result?.deaths ?? Infinity)
+    })
 })
 const isHost = computed(() => players.value.some(p => p.id === playerId && p.host))
 const isReady = computed(() => match.value.readyIds.includes(playerId))
-const canStart = computed(() => isHost.value && players.value.length >= 2 && players.value.filter(p => !p.host).every(p => match.value.readyIds.includes(p.id)) && !match.value.started)
-async function refreshMatch(): Promise<void> {
-  if (!room.value) return
-  try {
-    const next = await matchRequest(room.value, playerId, 'get')
-    if (next.revision >= match.value.revision) match.value = next
-    if (pendingReplay.value && next.started && next.round && !next.round.results[playerId]) void submitReplay()
-  } catch (e) { error.value = e instanceof Error ? e.message : 'Could not load match' }
-}
-async function setReady(): Promise<void> {
-  if (busy.value || !room.value || isHost.value) return
-  busy.value = true
-  try { match.value = await matchRequest(room.value, playerId, 'ready', { ready: !isReady.value }); error.value = '' }
-  catch (e) { error.value = e instanceof Error ? e.message : 'Could not update ready status' }
-  finally { busy.value = false }
-}
-async function changeSettings(settings: MatchSettings): Promise<void> {
-  if (busy.value || !isHost.value || !room.value) return
-  busy.value = true
-  try { match.value = await matchRequest(room.value, playerId, 'settings', { settings }); error.value = '' }
-  catch (e) { error.value = e instanceof Error ? e.message : 'Could not change settings' }
-  finally { busy.value = false }
-}
-async function submitReplay(): Promise<void> {
-  if (submitting || !pendingReplay.value || !room.value || match.value.round?.results[playerId]) return
-  submitting = true
-  try {
-    const next = await matchRequest(room.value, playerId, 'finish', { replay: pendingReplay.value })
-    if (next.revision >= match.value.revision) match.value = next
-    pendingReplay.value = null
-    error.value = ''
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Could not submit your run'
-  } finally { submitting = false }
-}
-function onRaceFinished(result: { replay: string }): void {
-  pendingReplay.value = result.replay
-  void submitReplay()
-}
-async function startMatch(): Promise<void> {
-  if (busy.value || !canStart.value) return
-  busy.value = true
-  try { match.value = await matchRequest(room.value, playerId, 'start'); error.value = '' }
-  catch (e) { error.value = e instanceof Error ? e.message : 'Could not start match' }
-  finally { busy.value = false }
-}
-
-
+const canStart = computed(() =>
+  isHost.value && status.value === 'connected' && players.value.length >= 2 &&
+  players.value.filter(p => !p.host).every(p => match.value.readyIds.includes(p.id)) &&
+  !match.value.started,
+)
 const myColors = computed(() => applyLook(props.theme, look))
 const occupants = computed(() => players.value.slice(0, 8).map((p, index) => ({
-  ...p,
-  safeLook: sanitizeLook(p.look),
-  index,
+  ...p, safeLook: sanitizeLook(p.look), index,
 })))
 function colorsFor(player: LobbyPlayer): Theme { return applyLook(props.theme, sanitizeLook(player.look)) }
+
+// Match state lives in the HOST BROWSER. Apinator carries only messages.
+// Snapshots exclude replay payloads so no event exceeds Apinator's message limit.
+function publicState(): MatchState {
+  const r = match.value.round
+  return {
+    ...match.value,
+    readyIds: [...match.value.readyIds],
+    round: r ? {
+      ...r, playerIds: [...r.playerIds],
+      results: Object.fromEntries(Object.entries(r.results).map(([id, result]) => [id, { ...result, replay: '' }])),
+    } : null,
+  }
+}
+function broadcast(): void {
+  if (!session || !isHost.value || status.value !== 'connected') return
+  try { session.send({ kind: 'state', state: publicState() }) }
+  catch (e) { error.value = e instanceof Error ? e.message : 'Could not send lobby state' }
+}
+function commit(): void {
+  match.value = { ...match.value, revision: match.value.revision + 1 }
+  broadcast()
+}
+function restoreState(next: MatchState): void {
+  if (!next || !Number.isSafeInteger(next.revision) || next.revision < match.value.revision ||
+      !next.settings || ![3, 5, 10, 15].includes(next.settings.rounds) ||
+      !['all', 'easy', 'medium', 'hard'].includes(next.settings.difficulty)) return
+  // Retain previously delivered individual replay events when a compact state arrives.
+  const prior = match.value.round
+  if (next.round && prior?.number === next.round.number && prior.levelKey === next.round.levelKey) {
+    next = {
+      ...next, round: {
+        ...next.round,
+        results: Object.fromEntries(Object.entries(next.round.results).map(([id, result]) =>
+          [id, { ...result, replay: prior.results[id]?.replay || result.replay }]),
+        ),
+      },
+    }
+  }
+  match.value = next
+  if (next.started && next.round && !next.round.playerIds.includes(playerId)) {
+    resetLobby('Match already started')
+    return
+  }
+  if (pendingReplay.value && next.round && !next.round.results[playerId] && !isHost.value) {
+    sendFinish(pendingReplay.value)
+  }
+  if (next.round?.results[playerId]) pendingReplay.value = null
+}
+
+function receiveResult(message: Extract<LobbyEvent, { kind: 'result' }>): void {
+  const round = match.value.round
+  if (!round || round.number !== message.round || !round.playerIds.includes(message.playerId) ||
+      !message.result || typeof message.result.ticks !== 'number' ||
+      typeof message.result.deaths !== 'number' || typeof message.result.replay !== 'string') return
+  match.value = {
+    ...match.value,
+    round: { ...round, results: { ...round.results, [message.playerId]: message.result } },
+  }
+  if (message.playerId === playerId) pendingReplay.value = null
+}
+
+function recordFinish(id: string, replay: string, roundNumber: number): void {
+  if (!isHost.value || typeof replay !== 'string' || !replay || replay.length > 100_000) return
+  const r = match.value.round
+  if (!r || r.number !== roundNumber || !r.playerIds.includes(id) || r.results[id]) return
+  const level = LEVELS.find(l => l.key === r.levelKey)
+  if (!level) return
+  let result: RaceResult
+  try {
+    const run = simulate(compileLevel(level.data), decodeInputs(replay))
+    if (!run.finished) return
+    result = { ticks: run.ticks, deaths: run.deaths, replay, finished: true }
+  } catch { return }
+  match.value = { ...match.value, round: { ...r, results: { ...r.results, [id]: result } } }
+  try { session?.send({ kind: 'result', playerId: id, round: roundNumber, result }) }
+  catch (e) { error.value = e instanceof Error ? e.message : 'Could not send race result' }
+  commit()
+  if (id === playerId) pendingReplay.value = null
+}
+
+function onMessage(message: LobbyEvent): void {
+  if (message.kind === 'sync-request') {
+    if (isHost.value) {
+      broadcast()
+      // Re-send individual recordings after a reconnect, not in a huge snapshot.
+      const r = match.value.round
+      if (r) for (const [id, result] of Object.entries(r.results)) {
+        if (result.replay) {
+          try { session?.send({ kind: 'result', playerId: id, round: r.number, result }) }
+          catch { /* leave the compact results available */ }
+        }
+      }
+    }
+  } else if (message.kind === 'state') {
+    if (!isHost.value && players.value.some(p => p.host)) restoreState(message.state)
+  } else if (message.kind === 'ready') {
+    if (!isHost.value || match.value.started || typeof message.ready !== 'boolean' ||
+        !players.value.some(p => p.id === message.playerId && !p.host)) return
+    const ready = new Set(match.value.readyIds)
+    if (message.ready) ready.add(message.playerId)
+    else ready.delete(message.playerId)
+    match.value = { ...match.value, readyIds: [...ready] }
+    commit()
+  } else if (message.kind === 'finish') {
+    recordFinish(message.playerId, message.replay, message.round)
+  } else if (message.kind === 'result') {
+    if (!isHost.value && players.value.some(p => p.host)) receiveResult(message)
+  }
+}
+
+function resetLobby(reason: string): void {
+  session?.close()
+  session = null
+  room.value = ''
+  players.value = []
+  match.value = emptyMatch()
+  pendingReplay.value = null
+  status.value = 'idle'
+  history.replaceState(null, '', location.pathname)
+  error.value = reason
+}
+
+function onPlayers(next: LobbyPlayer[]): void {
+  const previous = players.value.map(p => p.id).join(',')
+  players.value = next.slice(0, 8)
+  for (const p of players.value) namesById.value[p.id] = p.name
+  if (!players.value.some(p => p.id === playerId)) {
+    resetLobby('Room is full (8 players)')
+    return
+  }
+  if (!players.value.some(p => p.host)) {
+    resetLobby('Room not found or host disconnected')
+    return
+  }
+  if (isHost.value && previous !== players.value.map(p => p.id).join(',')) {
+    const active = new Set(players.value.map(p => p.id))
+    match.value = { ...match.value, readyIds: match.value.readyIds.filter(id => active.has(id)) }
+    // Disconnects during a race count as unfinished results; the host owns the decision.
+    const r = match.value.round
+    if (r) {
+      const results = { ...r.results }
+      for (const id of r.playerIds) {
+        if (!active.has(id) && !results[id]) results[id] = { ticks: 0, deaths: 0, replay: '', finished: false }
+      }
+      match.value = { ...match.value, round: { ...r, results } }
+    }
+    commit()
+  }
+}
 
 async function enter(action: 'create' | 'join'): Promise<void> {
   if (busy.value) return
   busy.value = true
   error.value = ''
   try {
-    const code = action === 'join' ? codeInput.value.trim().toUpperCase() : undefined
-    const result = await roomRequest(action, playerId, code)
-    if (!result.code) throw new Error('Room code missing')
-    room.value = result.code
+    const created = action === 'create' ? await createRoom(playerId) : null
+    const code = created?.code ?? codeInput.value.trim().toUpperCase()
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{5}$/.test(code)) throw new Error('Invalid room code')
+    room.value = code
+    match.value = emptyMatch()
     status.value = 'connecting'
-    session = connectLobby(result.code, playerId, name.value.trim().slice(0, 16) || 'Guest', { ...look }, p => { players.value = p; for (const player of p) namesById.value[player.id] = player.name }, s => { status.value = s })
-    history.replaceState(null, '', `${location.pathname}?room=${result.code}`)
-    await refreshMatch()
-    pollTimer = setInterval(() => { void refreshMatch() }, 1500)
+    session = connectLobby(
+      code, playerId, name.value.trim().slice(0, 16) || 'Guest', { ...look },
+      created?.hostToken ?? null,
+      onPlayers,
+      s => {
+        status.value = s
+        if (s === 'connected' && isHost.value) broadcast()
+        if (!['connected', 'connecting', 'initialized'].includes(s)) error.value = s
+      },
+      onMessage,
+    )
+    history.replaceState(null, '', `${location.pathname}?room=${code}`)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Connection failed'
+    resetLobby(e instanceof Error ? e.message : 'Connection failed')
   } finally { busy.value = false }
 }
 async function leave(): Promise<void> {
-  if (pollTimer) clearInterval(pollTimer)
-  pollTimer = undefined
   session?.close()
   session = null
-  if (room.value) { try { await roomRequest('leave', playerId, room.value) } catch { /* expired room */ } }
   room.value = ''
   players.value = []
   pendingReplay.value = null
-  match.value = { settings: { rounds: 5, difficulty: 'all' }, readyIds: [], started: false, revision: 0, round: null }
+  match.value = emptyMatch()
   history.replaceState(null, '', location.pathname)
   emit('exit')
 }
@@ -135,9 +258,45 @@ async function copyInvite(): Promise<void> {
     copied.value = true
   } catch { error.value = 'Could not copy invite link' }
 }
-onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer); session?.close() })
-</script>
+function setReady(): void {
+  if (busy.value || !room.value || isHost.value || match.value.started) return
+  try { session?.send({ kind: 'ready', playerId, ready: !isReady.value }); error.value = '' }
+  catch (e) { error.value = e instanceof Error ? e.message : 'Could not send ready status' }
+}
+function changeSettings(settings: MatchSettings): void {
+  if (busy.value || !isHost.value || !room.value || match.value.started) return
+  match.value = { ...match.value, settings, readyIds: [] }
+  commit()
+}
+function startMatch(): void {
+  if (!canStart.value) return
+  const difficulty = match.value.settings.difficulty === 'medium' ? 'normal' : match.value.settings.difficulty
+  const pool = LEVELS.filter(l => difficulty === 'all' || l.difficulty === difficulty)
+  if (!pool.length) { error.value = 'No levels available for this difficulty'; return }
+  const random = new Uint32Array(1)
+  crypto.getRandomValues(random)
+  const level = pool[random[0]! % pool.length]!
+  match.value = {
+    ...match.value, started: true,
+    round: { number: 1, levelKey: level.key, startAt: Date.now() + 7000, playerIds: players.value.map(p => p.id), results: {} },
+  }
+  commit()
+}
+function sendFinish(replay: string): void {
+  const round = match.value.round
+  if (!round) return
+  try { session?.send({ kind: 'finish', playerId, round: round.number, replay }); error.value = '' }
+  catch (e) { error.value = e instanceof Error ? e.message : 'Could not send race recording' }
+}
+function onRaceFinished(result: { replay: string }): void {
+  pendingReplay.value = result.replay
+  if (!match.value.round) return
+  if (isHost.value) recordFinish(playerId, result.replay, match.value.round.number)
+  else sendFinish(result.replay)
+}
 
+onBeforeUnmount(() => { session?.close() })
+</script>
 <template>
   <PageShell :theme="theme">
     <GameView
@@ -148,17 +307,17 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer); session?.close(
       :level-key="'multiplayer:' + room + ':' + match.round.number"
       :intro="{ number: match.round.number, title: raceLevel.title, label: 'Multiplayer race' }"
       :multiplayer-start-at="match.round.startAt"
-      :multiplayer-error="error"
       exit-text="Leave match"
       @exit="void leave()"
       @finished="onRaceFinished"
     />
     <div v-else-if="match.started && match.round && allFinished" class="multiplayer">
-      <header class="top"><button class="ib" type="button" aria-label="Leave match" @click="void leave()">←</button><div class="title"><b>Race results</b><small>{{ raceLevel?.title ?? 'Multiplayer' }}</small></div><span class="tag">1 / {{ match.settings.rounds }}</span></header>
+      <header class="top"><button class="ib" type="button" aria-label="Leave match" @click="void leave()">←</button><div class="title"><b>Race results</b><small>{{ raceLevel?.title ?? 'Multiplayer' }}</small></div><span class="tag">{{ match.round.number }} / {{ match.settings.rounds }}</span></header>
       <div class="scroll"><div class="content">
         <section class="panel results-panel">
-          <div class="section-head"><div><b>FINISH ORDER</b><small>Race 1 of {{ match.settings.rounds }}</small></div></div>
-          <ol class="results-list"><li v-for="(entry, i) in standings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.result ? formatTicks(entry.result.ticks) : '—' }}</b><small>✕ {{ entry.result?.deaths ?? 0 }}</small></li></ol>
+          <div class="section-head"><div><b>FINISH ORDER</b><small>Race {{ match.round.number }} of {{ match.settings.rounds }}</small></div></div>
+          <ol class="results-list"><li v-for="(entry, i) in standings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.result?.finished ? formatTicks(entry.result.ticks) : 'DNF' }}</b><small>✕ {{ entry.result?.deaths ?? 0 }}</small></li></ol>
+          <small>Results for the first race. Additional rounds and the combined ranking are not implemented yet.</small>
         </section>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div></div>
@@ -188,6 +347,12 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer); session?.close(
               </div>
 
             </div>
+          </section>
+
+          <section v-if="room" class="panel ready-panel">
+            <template v-if="match.started"><strong>Starting race…</strong><small v-if="!raceLevel">Level unavailable. Please update your game.</small></template>
+            <template v-else-if="isHost"><button class="cta" type="button" :disabled="!canStart || busy" @click="void startMatch()">Start Game</button><small>{{ canStart ? 'Everyone is ready!' : 'Waiting for all players to be ready' }}</small></template>
+            <template v-else><button class="cta" type="button" :disabled="busy" @click="void setReady()">{{ isReady ? '✓ Ready — Cancel' : 'Ready' }}</button></template>
           </section>
 
           <template v-if="!room">
@@ -220,15 +385,11 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer); session?.close(
             </section>
             <section class="panel settings-panel">
               <div class="section-head"><div><b>MATCH SETTINGS</b><small>{{ isHost ? 'Host controls' : 'Selected by host' }}</small></div></div>
-              <div class="settings-grid">
-                <label class="field"><span>ROUNDS</span><select :value="match.settings.rounds" :disabled="!isHost || busy || match.started" @change="changeSettings({ ...match.settings, rounds: Number(($event.target as HTMLSelectElement).value) as LobbyRounds })"><option v-for="n in [3, 5, 10, 15]" :key="n" :value="n">{{ n }}</option></select></label>
-                <label class="field"><span>DIFFICULTY</span><select :value="match.settings.difficulty" :disabled="!isHost || busy || match.started" @change="changeSettings({ ...match.settings, difficulty: ($event.target as HTMLSelectElement).value as LobbyDifficulty })"><option value="all">All</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
+              <div v-if="isHost" class="settings-grid">
+                <label class="field"><span>ROUNDS</span><select :value="match.settings.rounds" :disabled="busy || match.started" @change="changeSettings({ ...match.settings, rounds: Number(($event.target as HTMLSelectElement).value) as LobbyRounds })"><option v-for="n in [3, 5, 10, 15]" :key="n" :value="n">{{ n }}</option></select></label>
+                <label class="field"><span>DIFFICULTY</span><select :value="match.settings.difficulty" :disabled="busy || match.started" @change="changeSettings({ ...match.settings, difficulty: ($event.target as HTMLSelectElement).value as LobbyDifficulty })"><option value="all">All</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
               </div>
-            </section>
-            <section class="panel ready-panel">
-              <template v-if="match.started"><strong>Starting race…</strong><small v-if="!raceLevel">Level unavailable. Please update your game.</small></template>
-              <template v-else-if="isHost"><button class="cta" type="button" :disabled="!canStart || busy" @click="void startMatch()">Start Game</button><small>{{ canStart ? 'Everyone is ready!' : 'Waiting for all players to be ready' }}</small></template>
-              <template v-else><button class="cta" type="button" :disabled="busy" @click="void setReady()">{{ isReady ? '✓ Ready — Cancel' : 'Ready' }}</button></template>
+              <div v-else class="settings-summary">{{ match.settings.rounds }} rounds · {{ { all: 'All', easy: 'Easy', medium: 'Medium', hard: 'Hard' }[match.settings.difficulty] }} difficulty</div>
             </section>
           </template>
           <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -256,9 +417,9 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer); session?.close(
 </style>
 
 <style scoped>
-.room-panel{gap:0}.room-info{display:flex;flex-direction:column;gap:4px}.room-info>b{font-size:16px;font-weight:900;color:var(--accent)}.room-info>small,.ready-panel>small{font-size:12px;font-weight:700;color:var(--muted)}.room-info .invite-row{justify-content:space-between;gap:12px}.room-info .copy-link{flex-shrink:0}.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settings-grid select{width:100%;min-width:0;font:inherit;font-weight:700;font-size:14px;padding:7px 8px;color:var(--text);background:var(--panel);border:2px solid var(--line);border-radius:10px}.settings-grid select:disabled{opacity:.65}.runner-ready{font-size:9px;font-weight:900;padding:2px 5px;background:var(--panel);color:var(--text);border-radius:5px}.ready-panel{display:grid}.ready-panel>strong{color:var(--text)}
+.room-panel{gap:0}.room-info{display:flex;flex-direction:column;gap:4px}.room-info>b{font-size:16px;font-weight:900;color:var(--accent)}.room-info>small,.ready-panel>small{font-size:12px;font-weight:700;color:var(--muted)}.room-info .invite-row{justify-content:space-between;gap:12px}.room-info .copy-link{flex-shrink:0}.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settings-grid select{width:100%;min-width:0;font:inherit;font-weight:700;font-size:14px;padding:7px 8px;color:var(--text);background:var(--panel);border:2px solid var(--line);border-radius:10px}.settings-grid select:disabled{opacity:.65}.runner-ready{font-size:9px;font-weight:900;padding:2px 5px;background:var(--panel);color:var(--text);border-radius:5px}.ready-panel{display:grid}.ready-panel>strong{color:var(--text)}.settings-summary{font-size:14px;font-weight:800;color:var(--text)}
 </style>
 
 <style scoped>
-.results-list{list-style:none;margin:0;padding:0;display:grid;gap:9px}.results-list li{display:flex;align-items:center;gap:9px;border:2px solid var(--line);border-radius:12px;padding:10px;color:var(--text);font-weight:800}.results-list li.self{border-color:var(--accent)}.results-list li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.results-list li small{color:var(--muted);font-size:12px}
+.results-list{list-style:none;margin:0;padding:0;display:grid;gap:9px}.results-list li{display:flex;align-items:center;gap:9px;border:2px solid var(--line);border-radius:12px;padding:10px;color:var(--text);font-weight:800}.results-list li.self{border-color:var(--accent)}.results-list li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.results-list li small{color:var(--muted);font-size:12px}.results-panel>small{color:var(--muted);font-size:12px}
 </style>

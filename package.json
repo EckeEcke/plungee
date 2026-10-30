@@ -14,9 +14,9 @@
     "par": "vitest run tests/par.test.ts"
   },
   "dependencies": {
+    "@apinator/client": "^2.3.0",
     "@upstash/redis": "^1.39.0",
-    "vue": "^3.5.44",
-    "@apinator/client": "^2.3.0"
+    "vue": "^3.5.44"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
