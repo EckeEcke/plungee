@@ -31,6 +31,7 @@ const status = ref('idle')
 const error = ref('')
 const busy = ref(false)
 const copied = ref(false)
+const supportsNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 const playerId = crypto.randomUUID()
 let session: LobbySession | null = null
 
@@ -371,11 +372,33 @@ async function leave(): Promise<void> {
   history.replaceState(null, '', location.pathname)
   emit('exit')
 }
+function inviteUrl(): string {
+  return `${location.origin}${location.pathname}?room=${room.value}`
+}
+
 async function copyInvite(): Promise<void> {
   try {
-    await navigator.clipboard.writeText(`${location.origin}${location.pathname}?room=${room.value}`)
+    await navigator.clipboard.writeText(inviteUrl())
     copied.value = true
-  } catch { error.value = 'Could not copy invite link' }
+  } catch {
+    error.value = 'Could not copy invite link'
+  }
+}
+
+async function shareInvite(): Promise<void> {
+  if (!supportsNativeShare || !room.value) return
+
+  try {
+    await navigator.share({
+      title: 'Plungee Multiplayer',
+      text: 'Join my Plungee lobby!',
+      url: inviteUrl(),
+    })
+  } catch (e) {
+    // Closing the native share sheet is not an error.
+    if (e instanceof DOMException && e.name === 'AbortError') return
+    error.value = 'Could not share invite link'
+  }
 }
 function setReady(): void {
   if (busy.value || !room.value || isHost.value || match.value.started) return
@@ -582,7 +605,7 @@ onBeforeUnmount(() => {
                 <small>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small>
                 <small class="final-deaths" :aria-label="`${entry.totals.deaths} deaths`">
                   <SkullIcon :size="15" />
-                  × {{ entry.totals.deaths }}
+                  {{ entry.totals.deaths }}
                 </small>
               </div>
               <small v-else>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small>
@@ -623,9 +646,58 @@ onBeforeUnmount(() => {
           <section v-if="room" class="lobby-stage" aria-label="Animated multiplayer lobby">
             <div class="stage-top"><span class="stage-label">{{ room ? 'YOUR LOBBY' : 'READY TO PLUNGE?' }}</span><span class="stage-count">{{ room ? players.length : 1 }} / 8</span></div>
             <div class="playfield">
-              <div class="track track-one"></div><div class="track track-two"></div>
-              <span class="decoration star">✦</span><span class="decoration ring"></span><span class="decoration dot">●</span>
-              <div class="platform platform-a"></div><div class="platform platform-b"></div><div class="platform platform-c"></div>
+              <!-- Same Memphis motifs, color mixes and shadow as PageShell.vue. -->
+              <svg
+                class="lobby-decor"
+                viewBox="0 0 560 260"
+                preserveAspectRatio="xMidYMid slice"
+                aria-hidden="true"
+              >
+                <polygon
+                  points="130,42 166,106 94,106"
+                  fill="color-mix(in srgb, var(--c0) 50%, var(--bg1))"
+                />
+                <circle
+                  cx="472" cy="66" r="33"
+                  fill="none"
+                  stroke="color-mix(in srgb, var(--c2) 50%, var(--bg1))"
+                  stroke-width="10"
+                />
+                <path
+                  d="M340 158 q12 -19 24 0 t24 0 t24 0 t24 0"
+                  fill="none"
+                  stroke="color-mix(in srgb, var(--c1) 60%, var(--bg1))"
+                  stroke-width="10"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M28 200 l20 -22 l20 22 l20 -22 l20 22"
+                  fill="none"
+                  stroke="color-mix(in srgb, var(--c3) 55%, var(--bg1))"
+                  stroke-width="10"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <g fill="color-mix(in srgb, var(--c2) 55%, var(--bg1))">
+                  <circle cx="445" cy="208" r="5" />
+                  <circle cx="464" cy="208" r="5" />
+                  <circle cx="483" cy="208" r="5" />
+                  <circle cx="445" cy="227" r="5" />
+                  <circle cx="464" cy="227" r="5" />
+                  <circle cx="483" cy="227" r="5" />
+                </g>
+                <polygon
+                  points="250,207 286,231 250,253"
+                  fill="color-mix(in srgb, var(--c1) 50%, var(--bg1))"
+                />
+                <path
+                  d="M267 34 v34 M250 51 h34"
+                  fill="none"
+                  stroke="color-mix(in srgb, var(--c3) 50%, var(--bg1))"
+                  stroke-width="10"
+                  stroke-linecap="round"
+                />
+              </svg>
               <div v-if="!room" class="runner preview-runner">
                 <span class="runner-name">{{ name.trim() || 'YOU' }}</span>
                 <div class="runner-bob"><CharacterCanvas :colors="myColors" :look="look" :size="72" /></div>
@@ -666,7 +738,31 @@ onBeforeUnmount(() => {
           </template>
           <template v-else>
             <section class="panel room-panel">
-              <div class="room-info"><b>ROOM CODE</b><div class="invite-row"><strong class="room-code">{{ room }}</strong><button class="cta copy-link" :class="{ copied }" type="button" @click="void copyInvite()">{{ copied ? '✓ Copied' : 'Copy link' }}</button></div><small>Share this code with your friends</small></div>
+              <div class="room-info">
+                <b>ROOM CODE</b>
+                <div class="invite-row">
+                  <strong class="room-code">{{ room }}</strong>
+                  <div class="invite-actions">
+                    <button
+                      class="cta copy-link"
+                      :class="{ copied }"
+                      type="button"
+                      @click="void copyInvite()"
+                    >
+                      {{ copied ? '✓ Copied' : 'Copy link' }}
+                    </button>
+                    <button
+                      v-if="supportsNativeShare"
+                      class="cta"
+                      type="button"
+                      @click="void shareInvite()"
+                    >
+                      Share
+                    </button>
+                  </div>
+                </div>
+                <small>Share this code with your friends</small>
+              </div>
             </section>
             <section class="panel players-panel">
               <div class="section-head"><div><b>PLAYERS</b><small>{{ players.length }} of 8 slots filled</small></div></div>
@@ -938,81 +1034,14 @@ input {
   background: linear-gradient(145deg,var(--bg1),var(--bg2));
 }
 
-.track {
+/* Decorative motifs match the surrounding PageShell background. */
+.lobby-decor {
   position: absolute;
-  width: 140%;
-  height: 5px;
-  left: -20%;
-  background: var(--c1);
-  opacity: .45;
-  transform: rotate(-12deg);
-}
-
-.track-one {
-  top: 60px;
-}
-
-.track-two {
-  top: 155px;
-  transform: rotate(13deg);
-}
-
-.platform {
-  position: absolute;
-  height: 15px;
-  border: 3px solid var(--outline);
-  border-radius: 5px;
-  background: var(--c0);
-  box-shadow: 0 5px 0 var(--outline);
-}
-
-.platform-a {
-  width: 30%;
-  top: 100px;
-  left: -5%;
-  transform: rotate(-8deg);
-}
-
-.platform-b {
-  width: 34%;
-  top: 135px;
-  right: -6%;
-  transform: rotate(7deg);
-  background: var(--c3);
-}
-
-.platform-c {
-  width: 35%;
-  bottom: 34px;
-  left: 32%;
-  background: var(--c1);
-}
-
-.decoration {
-  position: absolute;
-  font-weight: 900;
-  color: var(--c2);
-}
-
-.star {
-  font-size: 37px;
-  top: 18px;
-  right: 20%;
-}
-
-.ring {
-  width: 25px;
-  height: 25px;
-  border: 6px solid var(--c3);
-  border-radius: 50%;
-  left: 15%;
-  bottom: 30px;
-}
-
-.dot {
-  right: 10%;
-  bottom: 60px;
-  font-size: 16px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  filter: drop-shadow(5px 5px 0 var(--decor-shadow));
 }
 
 .runner {
@@ -1223,7 +1252,15 @@ input {
 
 .room-info .invite-row {
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .room-info .copy-link {
