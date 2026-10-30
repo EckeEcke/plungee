@@ -19,7 +19,7 @@ export async function roomRequest(action: 'create' | 'join' | 'leave', playerId:
 export function connectLobby(code: string, playerId: string, name: string, look: Look, onPlayers: (players: LobbyPlayer[]) => void, onStatus: (status: string) => void): LobbySession {
   const appKey = import.meta.env.VITE_APINATOR_KEY
   if (!appKey) throw new Error('VITE_APINATOR_KEY is missing')
-  const cluster = import.meta.env.VITE_APINATOR_CLUSTER || 'us'
+  const cluster = import.meta.env.VITE_APINATOR_CLUSTER || 'eu'
   const connection = new Apinator({
     appKey, cluster,
     authEndpoint: `/.netlify/functions/apinator-auth?player_id=${encodeURIComponent(playerId)}&name=${encodeURIComponent(name)}&look=${encodeURIComponent(JSON.stringify(look))}`,
