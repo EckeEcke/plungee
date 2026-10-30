@@ -2,12 +2,14 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import PageShell from './PageShell.vue'
 import GameView from './GameView.vue'
+import RaceView from './RaceView.vue'
+import type { GhostSpec } from '../game/ghost'
 import { LEVELS } from '../levels'
 import { compileLevel, decodeInputs, formatTicks, simulate } from '../sim'
 import CharacterCanvas from './CharacterCanvas.vue'
-import { applyLook, look, sanitizeLook } from '../game/look'
+import { applyLook, look, sanitizeLook, type Look } from '../game/look'
 import type { Theme } from '../game/theme'
-import { loadName } from '../online/api'
+import { loadName, type WeeklyRace } from '../online/api'
 import {
   connectLobby, createRoom,
   type LobbyPlayer, type LobbySession, type LobbyEvent,
@@ -36,6 +38,10 @@ const emptyMatch = (): MatchState => ({
 })
 const match = ref<MatchState>(emptyMatch())
 const namesById = ref<Record<string, string>>({})
+const looksById = ref<Record<string, Look>>({})
+const showResults = ref(false)
+const replayAgainAt = ref<number | null>(null)
+const replayCycle = ref(0)
 const pendingReplay = ref<string | null>(null)
 const raceLevel = computed(() => LEVELS.find(l => l.key === match.value.round?.levelKey))
 const allFinished = computed(() => {
@@ -52,6 +58,33 @@ const standings = computed(() => {
       return ta - tb || (a.result?.deaths ?? Infinity) - (b.result?.deaths ?? Infinity)
     })
 })
+/** Replays are delivered individually by the host, not in the compact state. */
+const replayEntries = computed(() => {
+  const round = match.value.round
+  if (!round || !allFinished.value || round.replayAt === null) return null
+  const completed = standings.value.filter(entry => entry.result?.finished)
+  if (!completed.length || completed.some(entry => !entry.result?.replay)) return null
+  return completed.map((entry, index) => ({
+    id: entry.id,
+    rank: index + 1,
+    name: entry.name,
+    ticks: entry.result!.ticks,
+    replay: entry.result!.replay,
+    you: entry.id === playerId,
+  }))
+})
+const replayRace = computed<WeeklyRace | null>(() => {
+  const entries = replayEntries.value
+  const level = raceLevel.value
+  if (!entries || !level) return null
+  return { week: room.value, title: level.title, data: level.data, entries }
+})
+const replayGhosts = computed<GhostSpec[]>(() => replayEntries.value?.map(entry => ({
+  replay: entry.replay,
+  label: entry.name,
+  look: sanitizeLook(looksById.value[entry.id]),
+  solid: true,
+})) ?? [])
 const isHost = computed(() => players.value.some(p => p.id === playerId && p.host))
 const isReady = computed(() => match.value.readyIds.includes(playerId))
 const canStart = computed(() =>
@@ -138,7 +171,10 @@ function recordFinish(id: string, replay: string, roundNumber: number): void {
     if (!run.finished) return
     result = { ticks: run.ticks, deaths: run.deaths, replay, finished: true }
   } catch { return }
-  match.value = { ...match.value, round: { ...r, results: { ...r.results, [id]: result } } }
+  const results = { ...r.results, [id]: result }
+  const complete = r.playerIds.every(pid => !!results[pid])
+  const replayAt = complete ? Date.now() + 5000 : r.replayAt
+  match.value = { ...match.value, round: { ...r, results, replayAt } }
   try { session?.send({ kind: 'result', playerId: id, round: roundNumber, result }) }
   catch (e) { error.value = e instanceof Error ? e.message : 'Could not send race result' }
   commit()
@@ -190,7 +226,10 @@ function resetLobby(reason: string): void {
 function onPlayers(next: LobbyPlayer[]): void {
   const previous = players.value.map(p => p.id).join(',')
   players.value = next.slice(0, 8)
-  for (const p of players.value) namesById.value[p.id] = p.name
+  for (const p of players.value) {
+    namesById.value[p.id] = p.name
+    looksById.value[p.id] = sanitizeLook(p.look)
+  }
   if (!players.value.some(p => p.id === playerId)) {
     resetLobby('Room is full (8 players)')
     return
@@ -209,7 +248,10 @@ function onPlayers(next: LobbyPlayer[]): void {
       for (const id of r.playerIds) {
         if (!active.has(id) && !results[id]) results[id] = { ticks: 0, deaths: 0, replay: '', finished: false }
       }
-      match.value = { ...match.value, round: { ...r, results } }
+      const complete = r.playerIds.every(id => !!results[id])
+      const hasReplay = Object.values(results).some(result => result.finished)
+      const replayAt = r.replayAt ?? (complete && hasReplay ? Date.now() + 5000 : null)
+      match.value = { ...match.value, round: { ...r, results, replayAt } }
     }
     commit()
   }
@@ -278,7 +320,7 @@ function startMatch(): void {
   const level = pool[random[0]! % pool.length]!
   match.value = {
     ...match.value, started: true,
-    round: { number: 1, levelKey: level.key, startAt: Date.now() + 7000, playerIds: players.value.map(p => p.id), results: {} },
+    round: { number: 1, levelKey: level.key, startAt: Date.now() + 7000, replayAt: null, playerIds: players.value.map(p => p.id), results: {} },
   }
   commit()
 }
@@ -287,6 +329,15 @@ function sendFinish(replay: string): void {
   if (!round) return
   try { session?.send({ kind: 'finish', playerId, round: round.number, replay }); error.value = '' }
   catch (e) { error.value = e instanceof Error ? e.message : 'Could not send race recording' }
+}
+function watchReplay(): void {
+  if (!replayRace.value) return
+  replayAgainAt.value = Date.now() + 2000
+  replayCycle.value++
+  showResults.value = false
+}
+function finishReplay(): void {
+  showResults.value = true
 }
 function onRaceFinished(result: { replay: string }): void {
   pendingReplay.value = result.replay
@@ -299,8 +350,18 @@ onBeforeUnmount(() => { session?.close() })
 </script>
 <template>
   <PageShell :theme="theme">
+    <RaceView
+      v-if="match.started && match.round && allFinished && replayRace && !showResults"
+      :key="'multiplayer-replay-' + room + '-' + match.round.number + '-' + replayCycle"
+      :theme="theme"
+      :race="replayRace"
+      :ghosts="replayGhosts"
+      :replay-start-at="replayAgainAt ?? match.round.replayAt"
+      multiplayer
+      @exit="finishReplay"
+    />
     <GameView
-      v-if="match.started && match.round && raceLevel && !allFinished"
+      v-else-if="match.started && match.round && raceLevel && !allFinished"
       :key="'multiplayer-' + room + '-' + match.round.number"
       :theme="myColors"
       :level-data="raceLevel.data"
@@ -311,12 +372,17 @@ onBeforeUnmount(() => { session?.close() })
       @exit="void leave()"
       @finished="onRaceFinished"
     />
+    <div v-else-if="match.started && match.round && allFinished && match.round.replayAt !== null && !replayRace && !showResults" class="multiplayer">
+      <header class="top"><button class="ib" type="button" aria-label="Leave match" @click="void leave()">←</button><div class="title"><b>Multiplayer</b><small>{{ raceLevel?.title ?? 'Race' }}</small></div></header>
+      <div class="scroll"><div class="content"><section class="panel"><div class="section-head"><div><b>PREPARING REPLAY</b><small>Receiving the completed runs…</small></div></div></section><p v-if="error" class="error" role="alert">{{ error }}</p></div></div>
+    </div>
     <div v-else-if="match.started && match.round && allFinished" class="multiplayer">
       <header class="top"><button class="ib" type="button" aria-label="Leave match" @click="void leave()">←</button><div class="title"><b>Race results</b><small>{{ raceLevel?.title ?? 'Multiplayer' }}</small></div><span class="tag">{{ match.round.number }} / {{ match.settings.rounds }}</span></header>
       <div class="scroll"><div class="content">
         <section class="panel results-panel">
           <div class="section-head"><div><b>FINISH ORDER</b><small>Race {{ match.round.number }} of {{ match.settings.rounds }}</small></div></div>
           <ol class="results-list"><li v-for="(entry, i) in standings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.result?.finished ? formatTicks(entry.result.ticks) : 'DNF' }}</b><small>✕ {{ entry.result?.deaths ?? 0 }}</small></li></ol>
+          <button v-if="replayRace" class="cta" type="button" @click="watchReplay">Watch replay</button>
           <small>Results for the first race. Additional rounds and the combined ranking are not implemented yet.</small>
         </section>
         <p v-if="error" class="error" role="alert">{{ error }}</p>

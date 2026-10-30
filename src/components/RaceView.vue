@@ -3,12 +3,20 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { startMusic, stopMusic } from '../audio/audio'
 import { Game, type HudState } from '../game/game'
 import { GHOST_COLORS, type GhostSpec } from '../game/ghost'
+import { applyLook } from '../game/look'
 import type { Theme } from '../game/theme'
 import { compileLevel, formatTicks } from '../sim'
 import type { WeeklyRace } from '../online/api'
 
 /** Rennen der Top 5 der Vorwoche: alle laufen gleichzeitig, die Kamera folgt dem Erstplatzierten. */
-const props = defineProps<{ theme: Theme; race: WeeklyRace }>()
+const props = withDefaults(defineProps<{
+  theme: Theme
+  race: WeeklyRace
+  /** Multiplayer uses the same replay engine with the actual player looks. */
+  multiplayer?: boolean
+  ghosts?: GhostSpec[]
+  replayStartAt?: number | null
+}>(), { multiplayer: false, ghosts: () => [], replayStartAt: null })
 const emit = defineEmits<{ exit: [] }>()
 
 const column = ref<HTMLElement | null>(null)
@@ -43,9 +51,15 @@ const cssVars = computed(() => ({
   '--frame': props.theme.frame,
 }))
 
-const specs = computed<GhostSpec[]>(() =>
-  props.race.entries.map((e, i) => ({ replay: e.replay, label: e.name, color: GHOST_COLORS[i % GHOST_COLORS.length] })),
+const specs = computed<GhostSpec[]>(() => props.multiplayer
+  ? (props.ghosts ?? [])
+  : props.race.entries.map((e, i) => ({ replay: e.replay, label: e.name, color: GHOST_COLORS[i % GHOST_COLORS.length] })),
 )
+
+const runnerColor = (index: number): string => {
+  const spec = specs.value[index]
+  return spec?.color ?? (spec?.look ? applyLook(props.theme, spec.look).player : GHOST_COLORS[index % GHOST_COLORS.length])
+}
 
 /** Zeile je Läufer: Platz, Name, Fortschritt und – im Ziel – die Zeit */
 const rows = computed(() =>
@@ -57,7 +71,7 @@ const rows = computed(() =>
       rank: e.rank,
       name: e.name,
       ticks: e.ticks,
-      color: GHOST_COLORS[i % GHOST_COLORS.length],
+      color: runnerColor(i),
       progress: done ? 1 : (r?.progress ?? 0),
       done,
       you: e.you,
@@ -78,6 +92,7 @@ function focusRunner(index: number): void {
 }
 
 function replay(): void {
+  if (props.multiplayer) game?.setStartAt(Date.now() + 2000)
   game?.restart()
 }
 
@@ -88,6 +103,7 @@ onMounted(() => {
     hud.value = h
   })
   measureInset()
+  game.setStartAt(props.replayStartAt ?? null)
   game.load(compileLevel(props.race.data), 'race:' + props.race.week)
   if (!game.spectate(specs.value)) {
     failed.value = true
@@ -115,10 +131,10 @@ const finished = computed(() => hud.value.status === 'finished')
 
       <div ref="hudBar" class="hud">
         <span class="pill time">{{ formatTicks(hud.ticks) }}</span>
-        <span class="pill title">Last week · {{ race.title }}</span>
+        <span class="pill title">{{ multiplayer ? 'Multiplayer' : 'Last week' }} · {{ race.title }}</span>
         <span class="spacer" />
         <button class="pill btn" type="button" aria-label="Watch again" @click="replay">↻</button>
-        <button class="pill btn" type="button" aria-label="Back" @click="emit('exit')">✕</button>
+        <button class="pill btn" type="button" :aria-label="multiplayer ? 'Results' : 'Back'" @click="emit('exit')">✕</button>
       </div>
 
       <ol class="standings" aria-label="Standings">
@@ -141,7 +157,7 @@ const finished = computed(() => hud.value.status === 'finished')
         <div class="card">
           <div class="head">Replay not available</div>
           <p class="note">These runs could not be played back.</p>
-          <button class="cta" type="button" @click="emit('exit')">Back</button>
+          <button class="cta" type="button" @click="emit('exit')">{{ multiplayer ? 'Results' : 'Back' }}</button>
         </div>
       </div>
 
@@ -159,7 +175,7 @@ const finished = computed(() => hud.value.status === 'finished')
             </ol>
             <div class="actions">
               <button class="cta" type="button" @click="replay">Watch again</button>
-              <button class="ghost" type="button" @click="emit('exit')">Back</button>
+              <button class="ghost" type="button" @click="emit('exit')">{{ multiplayer ? 'Results' : 'Back' }}</button>
             </div>
           </div>
         </div>

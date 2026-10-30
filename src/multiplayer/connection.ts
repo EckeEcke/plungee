@@ -10,6 +10,8 @@ export interface MatchRound {
   number: number
   levelKey: string
   startAt: number
+  /** Host-coordinated replay countdown; null if there is no completed run. */
+  replayAt: number | null
   playerIds: string[]
   results: Record<string, RaceResult>
 }

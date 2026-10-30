@@ -1,4 +1,5 @@
 import { reactive, watch } from 'vue'
+import type { Look } from './look'
 import { World, decodeInputs, simulate, type CompiledLevel, type InputDir } from '../sim'
 
 /**
@@ -14,6 +15,8 @@ export interface GhostSpec {
   label?: string
   /** Körperfarbe; ohne Angabe die Farbe des Spielers */
   color?: string
+  /** Individueller Charakter-Look im Multiplayer-Replay. */
+  look?: Look
   /** Deckend statt blass (Rennen der Top 5) */
   solid?: boolean
 }
@@ -48,7 +51,7 @@ export class Ghost {
 
   /** Wird gezeichnet, solange er läuft: nicht tot, nicht schon im Ziel */
   get visible(): boolean {
-    return this.world.tick > 0 && !this.world.finished && !this.world.p.dead
+    return !this.world.finished && !this.world.p.dead
   }
 
   /** Tick des Ziels, solange er noch läuft null */
