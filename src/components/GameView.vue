@@ -56,6 +56,7 @@ const hud = shallowRef<HudState>({
   newBest: false,
   replay: '',
   race: [],
+  focusedRunner: null,
 })
 let game: Game | null = null
 
