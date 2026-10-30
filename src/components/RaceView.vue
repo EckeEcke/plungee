@@ -355,10 +355,20 @@ const finished = computed(() => hud.value.status === 'finished')
   align-items: center;
   justify-content: center;
   pointer-events: none;
+}
+.countdown span {
   font-size: 120px;
   font-weight: 900;
-  color: var(--text);
-  text-shadow: 4px 4px 0 var(--outline);
+  color: var(--accent);
+  -webkit-text-stroke: 4px var(--outline);
+  paint-order: stroke fill;
+  text-shadow: 6px 6px 0 var(--outline);
+  animation: pop 0.65s ease-out;
+}
+@keyframes pop {
+  0% { transform: scale(1.6); opacity: 0; }
+  35% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.85; }
 }
 .replay-intro {
   position: absolute;

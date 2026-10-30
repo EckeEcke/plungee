@@ -6,6 +6,7 @@ import RaceView from './RaceView.vue'
 import type { GhostSpec } from '../game/ghost'
 import { LEVELS } from '../levels'
 import { compileLevel, decodeInputs, formatTicks, simulate } from '../sim'
+import { addRoundTotals, compareTotals, roundPoints } from '../multiplayer/scoring'
 import CharacterCanvas from './CharacterCanvas.vue'
 import { applyLook, look, sanitizeLook, type Look } from '../game/look'
 import type { Theme } from '../game/theme'
@@ -35,6 +36,7 @@ let session: LobbySession | null = null
 const emptyMatch = (): MatchState => ({
   settings: { rounds: 5, difficulty: 'all' }, readyIds: [],
   started: false, revision: 0, round: null,
+  totals: {}, playedLevels: [], completed: false,
 })
 const match = ref<MatchState>(emptyMatch())
 const namesById = ref<Record<string, string>>({})
@@ -48,6 +50,21 @@ const allFinished = computed(() => {
   const r = match.value.round
   return !!r && r.playerIds.length > 0 && r.playerIds.every(id => !!r.results[id])
 })
+const currentPoints = computed(() => match.value.round && allFinished.value
+  ? roundPoints(match.value.round) : {})
+const cumulativeTotals = computed(() => {
+  const r = match.value.round
+  return r && allFinished.value && !match.value.completed
+    ? addRoundTotals(match.value.totals, r)
+    : match.value.totals
+})
+const overallStandings = computed(() => Object.entries(cumulativeTotals.value)
+  .map(([id, totals]) => ({
+    id, totals,
+    name: namesById.value[id] ?? (id === playerId ? name.value : 'Player'),
+  }))
+  .sort((a, b) => compareTotals(a.totals, b.totals) || a.name.localeCompare(b.name)))
+const isFinalRound = computed(() => (match.value.round?.number ?? 0) >= match.value.settings.rounds)
 const standings = computed(() => {
   const r = match.value.round
   if (!r) return []
@@ -105,6 +122,8 @@ function publicState(): MatchState {
   return {
     ...match.value,
     readyIds: [...match.value.readyIds],
+    playedLevels: [...match.value.playedLevels],
+    totals: Object.fromEntries(Object.entries(match.value.totals).map(([id, total]) => [id, { ...total }])),
     round: r ? {
       ...r, playerIds: [...r.playerIds],
       results: Object.fromEntries(Object.entries(r.results).map(([id, result]) => [id, { ...result, replay: '' }])),
@@ -123,9 +142,15 @@ function commit(): void {
 function restoreState(next: MatchState): void {
   if (!next || !Number.isSafeInteger(next.revision) || next.revision < match.value.revision ||
       !next.settings || ![3, 5, 10, 15].includes(next.settings.rounds) ||
-      !['all', 'easy', 'medium', 'hard'].includes(next.settings.difficulty)) return
-  // Retain previously delivered individual replay events when a compact state arrives.
+      !['all', 'easy', 'medium', 'hard'].includes(next.settings.difficulty) ||
+      !next.totals || !Array.isArray(next.playedLevels) || typeof next.completed !== 'boolean') return
+  // Retain previously delivered individual replay events only within the same round.
   const prior = match.value.round
+  if (next.round?.number !== prior?.number) {
+    showResults.value = false
+    replayAgainAt.value = null
+    pendingReplay.value = null
+  }
   if (next.round && prior?.number === next.round.number && prior.levelKey === next.round.levelKey) {
     next = {
       ...next, round: {
@@ -218,6 +243,8 @@ function resetLobby(reason: string): void {
   players.value = []
   match.value = emptyMatch()
   pendingReplay.value = null
+  showResults.value = false
+  replayAgainAt.value = null
   status.value = 'idle'
   history.replaceState(null, '', location.pathname)
   error.value = reason
@@ -290,6 +317,8 @@ async function leave(): Promise<void> {
   room.value = ''
   players.value = []
   pendingReplay.value = null
+  showResults.value = false
+  replayAgainAt.value = null
   match.value = emptyMatch()
   history.replaceState(null, '', location.pathname)
   emit('exit')
@@ -310,18 +339,58 @@ function changeSettings(settings: MatchSettings): void {
   match.value = { ...match.value, settings, readyIds: [] }
   commit()
 }
-function startMatch(): void {
-  if (!canStart.value) return
+function chooseLevel(played: string[]): (typeof LEVELS)[number] | null {
   const difficulty = match.value.settings.difficulty === 'medium' ? 'normal' : match.value.settings.difficulty
   const pool = LEVELS.filter(l => difficulty === 'all' || l.difficulty === difficulty)
-  if (!pool.length) { error.value = 'No levels available for this difficulty'; return }
+  if (!pool.length) { error.value = 'No levels available for this difficulty'; return null }
+  // Avoid repeats while enough different levels remain in the selected difficulty.
+  const fresh = pool.filter(l => !played.includes(l.key))
+  const available = fresh.length ? fresh : pool
   const random = new Uint32Array(1)
   crypto.getRandomValues(random)
-  const level = pool[random[0]! % pool.length]!
+  return available[random[0]! % available.length]!
+}
+function startMatch(): void {
+  if (!canStart.value) return
+  const level = chooseLevel([])
+  if (!level) return
+  const ids = players.value.map(p => p.id)
   match.value = {
-    ...match.value, started: true,
-    round: { number: 1, levelKey: level.key, startAt: Date.now() + 7000, replayAt: null, playerIds: players.value.map(p => p.id), results: {} },
+    ...match.value, started: true, completed: false,
+    totals: Object.fromEntries(ids.map(id => [id, { points: 0, ticks: 0, deaths: 0, dnfs: 0 }])),
+    playedLevels: [level.key],
+    round: { number: 1, levelKey: level.key, startAt: Date.now() + 3000, replayAt: null, playerIds: ids, results: {} },
   }
+  showResults.value = false
+  replayAgainAt.value = null
+  commit()
+}
+function nextRound(): void {
+  const previous = match.value.round
+  if (!isHost.value || !previous || !allFinished.value || match.value.completed || isFinalRound.value) return
+  const level = chooseLevel(match.value.playedLevels)
+  if (!level) return
+  const ids = players.value.map(p => p.id)
+  match.value = {
+    ...match.value,
+    totals: addRoundTotals(match.value.totals, previous),
+    playedLevels: [...match.value.playedLevels, level.key],
+    round: { number: previous.number + 1, levelKey: level.key, startAt: Date.now() + 3000, replayAt: null, playerIds: ids, results: {} },
+  }
+  showResults.value = false
+  replayAgainAt.value = null
+  pendingReplay.value = null
+  commit()
+}
+function finishMatch(): void {
+  if (!isHost.value || !allFinished.value || !isFinalRound.value || match.value.completed || !match.value.round) return
+  match.value = {
+    ...match.value,
+    totals: addRoundTotals(match.value.totals, match.value.round),
+    completed: true,
+  }
+  showResults.value = true
+  replayAgainAt.value = null
   commit()
 }
 function sendFinish(replay: string): void {
@@ -377,13 +446,18 @@ onBeforeUnmount(() => { session?.close() })
       <div class="scroll"><div class="content"><section class="panel"><div class="section-head"><div><b>PREPARING REPLAY</b><small>Receiving the completed runs…</small></div></div></section><p v-if="error" class="error" role="alert">{{ error }}</p></div></div>
     </div>
     <div v-else-if="match.started && match.round && allFinished" class="multiplayer">
-      <header class="top"><button class="ib" type="button" aria-label="Leave match" @click="void leave()">←</button><div class="title"><b>Race results</b><small>{{ raceLevel?.title ?? 'Multiplayer' }}</small></div><span class="tag">{{ match.round.number }} / {{ match.settings.rounds }}</span></header>
+      <header class="top"><button class="ib" type="button" aria-label="Leave match" @click="void leave()">←</button><div class="title"><b>{{ match.completed ? 'Final standings' : 'Race results' }}</b><small>{{ match.completed ? 'Match complete' : (raceLevel?.title ?? 'Multiplayer') }}</small></div><span class="tag">{{ match.round.number }} / {{ match.settings.rounds }}</span></header>
       <div class="scroll"><div class="content">
-        <section class="panel results-panel">
+        <section v-if="!match.completed" class="panel results-panel">
           <div class="section-head"><div><b>FINISH ORDER</b><small>Race {{ match.round.number }} of {{ match.settings.rounds }}</small></div></div>
-          <ol class="results-list"><li v-for="(entry, i) in standings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.result?.finished ? formatTicks(entry.result.ticks) : 'DNF' }}</b><small>✕ {{ entry.result?.deaths ?? 0 }}</small></li></ol>
+          <ol class="results-list"><li v-for="(entry, i) in standings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.result?.finished ? formatTicks(entry.result.ticks) : 'DNF' }}</b><small>+{{ currentPoints[entry.id] ?? 0 }} pts</small></li></ol>
+        </section>
+        <section class="panel results-panel">
+          <div class="section-head"><div><b>{{ match.completed ? 'FINAL STANDINGS' : 'OVERALL STANDINGS' }}</b><small>Points across {{ match.completed ? match.settings.rounds : match.round.number }} races</small></div></div>
+          <ol class="results-list"><li v-for="(entry, i) in overallStandings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.totals.points }} pts</b><small>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small></li></ol>
           <button v-if="replayRace" class="cta" type="button" @click="watchReplay">Watch replay</button>
-          <small>Results for the first race. Additional rounds and the combined ranking are not implemented yet.</small>
+          <button v-if="isHost && !match.completed" class="cta" type="button" @click="isFinalRound ? finishMatch() : nextRound()">{{ isFinalRound ? 'Show final standings' : 'Next race ▶' }}</button>
+          <small v-else-if="!isHost && !match.completed">{{ isFinalRound ? 'Waiting for the host to show the final standings…' : 'Waiting for the host to start the next race…' }}</small>
         </section>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div></div>

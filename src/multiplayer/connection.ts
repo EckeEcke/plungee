@@ -15,12 +15,16 @@ export interface MatchRound {
   playerIds: string[]
   results: Record<string, RaceResult>
 }
+export interface MatchTotals { points: number; ticks: number; deaths: number; dnfs: number }
 export interface MatchState {
   settings: MatchSettings
   readyIds: string[]
   started: boolean
   revision: number
   round: MatchRound | null
+  totals: Record<string, MatchTotals>
+  playedLevels: string[]
+  completed: boolean
 }
 
 /** Messages go ONLY over the Apinator presence channel, never via Redis or HTTP polling. */
