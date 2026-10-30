@@ -38,7 +38,7 @@ export default async (request: Request): Promise<Response> => {
     const invalid = {
       socket:
         typeof socket !== 'string' ||
-        !/^[0-9]+\.[0-9]+$/.test(socket),
+        socket.length === 0,
 
       channel:
         typeof channel !== 'string' ||
