@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto'
 import { Redis } from '@upstash/redis'
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
-const ROOM = /^presence-plungee-[A-Z2-9]{8}$/
+const ROOM = /^presence-plungee-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{5}$/
 const ID = /^[a-f0-9-]{36}$/i
 
 export default async (request: Request): Promise<Response> => {
