@@ -81,6 +81,12 @@ onMounted(async () => {
             {{ d.label }} <small>{{ doneIn(d.id) }}</small>
           </button>
         </div>
+        <GhostToggle
+          v-model="ghostSettings.self"
+          class="header-ghost"
+          label="Ghost"
+          title="Race your own best run as a ghost"
+        />
         <div class="gold" :title="`${golds} gold medals`">
           <MedalIcon medal="gold" :size="20" />
           <b>{{ golds }}</b>
@@ -98,12 +104,6 @@ onMounted(async () => {
           </span>
         </div>
         <button class="ib" type="button" aria-label="Next difficulty" @click="shift(1)">▶</button>
-      </div>
-    </div>
-
-    <div class="ghost-bar">
-      <div class="ghost-bar-in">
-        <GhostToggle v-model="ghostSettings.self" label="Ghost" title="Race your own best run as a ghost" />
       </div>
     </div>
 
@@ -255,18 +255,20 @@ onMounted(async () => {
   color: var(--muted);
 }
 
-/* Eigener Bestzeit-Ghost – gleiche Schaltfläche wie in Community Levels */
-.ghost-bar {
-  background: var(--panel);
-  border-bottom: 3px solid var(--line);
+/* Bestzeit-Ghost im vorhandenen Header. */
+.header-ghost {
+  flex-shrink: 0;
 }
 
-.ghost-bar-in {
-  width: min(100%, 520px);
-  margin: 0 auto;
-  padding: 7px 12px;
-  display: flex;
-  justify-content: flex-end;
+@media (max-width: 599px) {
+  .header-ghost {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+
+  .title {
+    min-width: 0;
+  }
 }
 
 /* Der Scrollbereich geht über die volle Breite, so sitzt die Scrollleiste am Fensterrand */

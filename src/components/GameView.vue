@@ -9,6 +9,7 @@ import type { Theme } from '../game/theme'
 import { medalFor, medalTargets } from '../game/medals'
 import { compileLevel, formatTicks, type LevelData } from '../sim'
 import MedalIcon from './MedalIcon.vue'
+import SkullIcon from './SkullIcon.vue'
 import { loadName, nameProblem, type BoardState } from '../online/api'
 
 const props = withDefaults(
@@ -211,7 +212,7 @@ function restart(): void {
 
       <div ref="hudBar" class="hud" data-noinput>
         <div class="pill time">{{ timeText }}</div>
-        <div class="pill deaths" title="Deaths">✕ {{ hud.deaths }}</div>
+        <div class="pill deaths" title="Deaths"><SkullIcon :size="17" /> {{ hud.deaths }}</div>
         <div class="spacer" />
         <button
           class="pill btn"
@@ -387,7 +388,7 @@ function restart(): void {
   font-size: 16px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  /* nie umbrechen oder schrumpfen: sonst rutscht die Zahl hinter dem ✕ in eine zweite Zeile */
+  /* Todesanzeige und Zeit bleiben in einer Zeile. */
   white-space: nowrap;
   flex: none;
 }
@@ -402,6 +403,9 @@ function restart(): void {
 }
 
 .deaths {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--accent);
 }
 

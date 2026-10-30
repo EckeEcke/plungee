@@ -8,6 +8,7 @@ import { LEVELS } from '../levels'
 import { compileLevel, decodeInputs, formatTicks, simulate } from '../sim'
 import { addRoundTotals, compareTotals, roundPoints } from '../multiplayer/scoring'
 import CharacterCanvas from './CharacterCanvas.vue'
+import SkullIcon from './SkullIcon.vue'
 import { applyLook, look, sanitizeLook, type Look } from '../game/look'
 import type { Theme } from '../game/theme'
 import { loadName, type WeeklyRace } from '../online/api'
@@ -580,7 +581,8 @@ onBeforeUnmount(() => {
               <div v-if="match.completed" class="final-stats">
                 <small>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small>
                 <small class="final-deaths" :aria-label="`${entry.totals.deaths} deaths`">
-                  💀 × {{ entry.totals.deaths }}
+                  <SkullIcon :size="15" />
+                  × {{ entry.totals.deaths }}
                 </small>
               </div>
               <small v-else>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small>
@@ -1336,6 +1338,9 @@ input {
 }
 
 .final-stats .final-deaths {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 11px;
 }
 
