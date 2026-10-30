@@ -30,8 +30,10 @@ const props = withDefaults(
     selfGhost?: boolean
     /** Multiplayer: fester gemeinsamer Start, keine lokalen Restarts oder Bestenlisten. */
     multiplayerStartAt?: number | null
+    /** Show a short FINAL ROUND intro before the last multiplayer countdown. */
+    finalRound?: boolean
   }>(),
-  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [], selfGhost: false, multiplayerStartAt: null },
+  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [], selfGhost: false, multiplayerStartAt: null, finalRound: false },
 )
 const emit = defineEmits<{
   exit: []
@@ -47,6 +49,21 @@ const nameBad = computed(() => nameProblem(nameDraft.value))
 const column = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 const hudBar = ref<HTMLElement | null>(null)
+const showFinalRoundIntro = ref(false)
+let finalRoundIntroTimer: ReturnType<typeof setTimeout> | undefined
+
+function cueFinalRoundIntro(): void {
+  if (!props.finalRound || props.multiplayerStartAt === null) return
+
+  // The host reserves one second before the usual 3-2-1 countdown.
+  const introMs = props.multiplayerStartAt - Date.now() - 3000
+  if (introMs <= 0) return
+
+  showFinalRoundIntro.value = true
+  finalRoundIntroTimer = setTimeout(() => {
+    showFinalRoundIntro.value = false
+  }, introMs)
+}
 const hud = shallowRef<HudState>({
   status: 'ready',
   ticks: 0,
@@ -115,6 +132,7 @@ onMounted(() => {
   game.setSelfGhostEnabled(props.selfGhost)
   game.setRestartEnabled(props.multiplayerStartAt === null)
   game.setStartAt(props.multiplayerStartAt)
+  cueFinalRoundIntro()
   game.load(compileLevel(props.levelData), props.levelKey)
   if (props.ghosts.length > 0) {
     game.setGhosts(props.ghosts)
@@ -125,6 +143,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearTimeout(finalRoundIntroTimer)
   insetObs?.disconnect()
   insetObs = null
   stopMusic()
@@ -212,13 +231,19 @@ function restart(): void {
       </div>
 
       <Transition name="fadeout">
-        <div v-if="intro && hud.status === 'ready'" class="intro" aria-hidden="true">
+        <div v-if="intro && hud.status === 'ready' && !showFinalRoundIntro" class="intro" aria-hidden="true">
           <small>{{ intro.label ?? (intro.number > 0 ? 'Level ' + intro.number : 'Community level') }}</small>
           <b>{{ intro.title }}</b>
         </div>
       </Transition>
 
-      <div v-if="hud.status === 'ready'" class="countdown" aria-live="assertive">
+      <Transition name="final-round-pop">
+        <div v-if="showFinalRoundIntro && hud.status === 'ready'" class="final-round-intro" aria-live="polite">
+          <span>FINAL ROUND</span>
+        </div>
+      </Transition>
+
+      <div v-if="hud.status === 'ready' && !showFinalRoundIntro" class="countdown" aria-live="assertive">
         <span :key="hud.countdown">{{ hud.countdown }}</span>
       </div>
 
@@ -471,6 +496,46 @@ function restart(): void {
     opacity: 1;
     transform: translateX(-50%);
   }
+}
+
+/* Same animated arcade card as FINISH in the multiplayer replay. */
+.final-round-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.final-round-intro span {
+  padding: 12px 22px;
+  border: 4px solid var(--outline);
+  border-radius: 16px;
+  background: var(--accent);
+  color: var(--outline);
+  box-shadow: 7px 7px 0 var(--outline);
+  font-size: clamp(25px, 6vw, 44px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  animation: final-round-bounce 0.55s cubic-bezier(.22, 1.5, .44, 1) both;
+}
+
+@keyframes final-round-bounce {
+  0% { opacity: 0; transform: scale(0.35) rotate(-12deg); }
+  65% { opacity: 1; transform: scale(1.12) rotate(3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-3deg); }
+}
+
+.final-round-pop-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.final-round-pop-leave-to {
+  opacity: 0;
 }
 
 .countdown {
@@ -908,6 +973,13 @@ function restart(): void {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .final-round-intro span {
+    animation: none;
+  }
+
+  .final-round-pop-leave-active {
+    transition: none;
+  }
   .fadeout-leave-active,
   .result-leave-active {
     transition: none;

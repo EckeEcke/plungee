@@ -267,7 +267,7 @@ export class Game {
         if (cd !== this.lastCountdown) {
           this.lastCountdown = cd
           // The multiplayer replay uses its own intro instead of a countdown.
-          if (!this.spectator || this.scheduledStartAt === null) playSfx('countdown')
+          if (cd <= 3 && (!this.spectator || this.scheduledStartAt === null)) playSfx('countdown')
         }
       }
       this.emitHud()
