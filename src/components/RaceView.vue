@@ -23,6 +23,8 @@ const column = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 const hudBar = ref<HTMLElement | null>(null)
 const failed = ref(false)
+const showReplayIntro = ref(false)
+let replayIntroTimer: ReturnType<typeof setTimeout> | undefined
 const hud = shallowRef<HudState>({
   status: 'ready',
   ticks: 0,
@@ -91,8 +93,24 @@ function focusRunner(index: number): void {
   game?.focusRunner(index)
 }
 
+/** Show the title during the existing pre-replay wait, without delaying the race. */
+function cueReplayIntro(startAt: number | null): void {
+  clearTimeout(replayIntroTimer)
+  const remaining = startAt === null ? 0 : startAt - Date.now()
+  showReplayIntro.value = props.multiplayer && remaining > 600
+  if (showReplayIntro.value) {
+    replayIntroTimer = setTimeout(() => {
+      showReplayIntro.value = false
+    }, Math.min(1500, remaining))
+  }
+}
+
 function replay(): void {
-  if (props.multiplayer) game?.setStartAt(Date.now() + 2000)
+  if (props.multiplayer) {
+    const startAt = Date.now() + 2000
+    game?.setStartAt(startAt)
+    cueReplayIntro(startAt)
+  }
   game?.restart()
 }
 
@@ -109,12 +127,14 @@ onMounted(() => {
     failed.value = true
     return
   }
+  cueReplayIntro(props.replayStartAt)
   game.restart()
   insetObs = new ResizeObserver(measureInset)
   insetObs.observe(column.value)
 })
 
 onBeforeUnmount(() => {
+  clearTimeout(replayIntroTimer)
   insetObs?.disconnect()
   stopMusic()
   game?.dispose()
@@ -131,7 +151,8 @@ const finished = computed(() => hud.value.status === 'finished')
 
       <div ref="hudBar" class="hud">
         <span class="pill time">{{ formatTicks(hud.ticks) }}</span>
-        <span class="pill title">{{ multiplayer ? 'Multiplayer' : 'Last week' }} · {{ race.title }}</span>
+        <span v-if="multiplayer && hud.status === 'running'" class="pill replay-badge">▶ REPLAY</span>
+        <span v-else class="pill title">{{ multiplayer ? 'Multiplayer' : 'Last week' }} · {{ race.title }}</span>
         <span class="spacer" />
         <button class="pill btn" type="button" aria-label="Watch again" @click="replay">↻</button>
         <button class="pill btn" type="button" :aria-label="multiplayer ? 'Results' : 'Back'" @click="emit('exit')">✕</button>
@@ -149,9 +170,15 @@ const finished = computed(() => hud.value.status === 'finished')
         </li>
       </ol>
 
-      <div v-if="hud.status === 'ready' && !failed" class="countdown" aria-live="assertive">
+      <div v-if="hud.status === 'ready' && !failed && !showReplayIntro" class="countdown" aria-live="assertive">
         <span :key="hud.countdown">{{ hud.countdown }}</span>
       </div>
+
+      <Transition name="replay-pop">
+        <div v-if="multiplayer && showReplayIntro && hud.status === 'ready' && !failed" class="replay-intro" aria-live="polite">
+          <span>REPLAY!</span>
+        </div>
+      </Transition>
 
       <div v-if="failed" class="result">
         <div class="card">
@@ -242,6 +269,12 @@ const finished = computed(() => hud.value.status === 'finished')
 .btn {
   cursor: pointer;
 }
+.replay-badge {
+  background: var(--accent);
+  color: var(--outline);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
 .standings,
 .final {
   list-style: none;
@@ -326,6 +359,40 @@ const finished = computed(() => hud.value.status === 'finished')
   font-weight: 900;
   color: var(--text);
   text-shadow: 4px 4px 0 var(--outline);
+}
+.replay-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.replay-intro span {
+  padding: 12px 22px;
+  border: 4px solid var(--outline);
+  border-radius: 16px;
+  background: var(--accent);
+  color: var(--outline);
+  box-shadow: 7px 7px 0 var(--outline);
+  font-size: clamp(44px, 12vw, 76px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  transform: rotate(-3deg);
+  animation: replay-bounce 0.55s cubic-bezier(.22, 1.5, .44, 1) both;
+}
+@keyframes replay-bounce {
+  0% { opacity: 0; transform: scale(0.35) rotate(-12deg); }
+  65% { opacity: 1; transform: scale(1.12) rotate(3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-3deg); }
+}
+.replay-pop-leave-active { transition: opacity 0.18s ease; }
+.replay-pop-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .replay-intro span { animation: none; }
+  .replay-pop-leave-active { transition: none; }
 }
 .result {
   position: absolute;
