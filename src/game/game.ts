@@ -41,6 +41,8 @@ export interface HudState {
   replay: string
   /** Zuschauermodus: Fortschritt und Zielzeit jedes Läufers (sonst leer) */
   race: Array<{ progress: number; finishTick: number | null }>
+  /** Index des aktuell von der Kamera verfolgten Läufers */
+  focusedRunner: number | null
 }
 
 const STEP_MS = DT * 1000
@@ -80,6 +82,7 @@ export class Game {
   private otherGhosts: Ghost[] = []
   /** Zuschauermodus: Eingaben des Führenden, die statt der Tastatur die Kamera-Welt steuern */
   private spectator: Int8Array | null = null
+  private focusedRunner = 0
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -135,7 +138,29 @@ export class Game {
     this.otherGhosts = specs.flatMap((s) => makeGhost(this.level, { ...s, solid: true }) ?? [])
     this.spectator = this.otherGhosts.length > 0 ? this.otherGhosts[0].inputs : null
     this.renderer.hidePlayer = this.spectator !== null
+    this.focusedRunner = 0
     return this.spectator !== null
+  }
+
+  /** Kamera auf einen noch aktiven Replay-Läufer richten. */
+  focusRunner(index: number): void {
+    if (!this.spectator || this.status === 'finished') return
+    const ghost = this.otherGhosts[index]
+    if (!ghost || ghost.world.finished) return
+    this.focusedRunner = index
+    this.emitHud()
+  }
+
+  /** Nach Zieleinlauf zum führenden noch aktiven Läufer wechseln. */
+  private advanceReplayCamera(): void {
+    if (!this.spectator || !this.otherGhosts[this.focusedRunner]?.world.finished) return
+    let next = -1
+    for (let i = 0; i < this.otherGhosts.length; i++) {
+      const g = this.otherGhosts[i]
+      if (g.world.finished) continue
+      if (next < 0 || g.progress > this.otherGhosts[next].progress) next = i
+    }
+    if (next >= 0) this.focusedRunner = next
   }
 
   /** Alle Ghosts, die gerade laufen sollen */
@@ -175,6 +200,7 @@ export class Game {
     this.inputCount = 0
     this.acc = 0
     this.status = 'ready'
+    this.focusedRunner = 0
     this.countdownMs = COUNTDOWN_STEP_MS * 3
     this.newBest = false
     this.replay = ''
@@ -235,6 +261,7 @@ export class Game {
         if (!this.spectator && this.inputCount < MAX_REPLAY_TICKS) this.inputs[this.inputCount++] = dir
         this.world.step(dir)
         for (const g of ghosts) g.step()
+        this.advanceReplayCamera()
         // Zuschauer: erst wenn alle im Ziel sind (der Führende ist es zuerst)
         if (this.spectator ? this.world.finished && ghosts.every((g) => g.world.finished) : this.world.finished) this.finish()
       }
@@ -242,7 +269,9 @@ export class Game {
       this.emitHud()
     }
 
-    this.renderer.update(dtMs / 1000, this.world)
+    this.renderer.update(dtMs / 1000, this.spectator
+      ? (this.otherGhosts[this.focusedRunner]?.world ?? this.world)
+      : this.world)
     this.renderer.draw(this.world, this.status === 'running' ? this.acc / STEP_MS : 0, this.status === 'running', this.activeGhosts())
   }
 
@@ -323,6 +352,7 @@ export class Game {
       newBest: this.newBest,
       replay: this.replay,
       race: this.spectator ? this.otherGhosts.map((g) => ({ progress: g.progress, finishTick: g.finishTick })) : [],
+      focusedRunner: this.spectator ? this.focusedRunner : null,
     })
   }
 

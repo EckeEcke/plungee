@@ -25,6 +25,7 @@ const hud = shallowRef<HudState>({
   newBest: false,
   bestTicks: null,
   replay: '',
+  focusedRunner: null,
 } as unknown as HudState)
 
 let game: Game | null = null
@@ -52,6 +53,7 @@ const rows = computed(() =>
     const r = hud.value.race[i]
     const done = r?.finishTick != null
     return {
+      index: i,
       rank: e.rank,
       name: e.name,
       ticks: e.ticks,
@@ -70,6 +72,10 @@ function measureInset(): void {
 }
 
 let insetObs: ResizeObserver | null = null
+
+function focusRunner(index: number): void {
+  game?.focusRunner(index)
+}
 
 function replay(): void {
   game?.restart()
@@ -116,12 +122,14 @@ const finished = computed(() => hud.value.status === 'finished')
       </div>
 
       <ol class="standings" aria-label="Standings">
-        <li v-for="r in rows" :key="r.rank" :class="{ done: r.done, you: r.you }">
-          <span class="dot" :style="{ background: r.color }" />
-          <span class="n">{{ r.rank }}</span>
-          <span class="nm">{{ r.name }}</span>
-          <span class="tm">{{ r.done ? formatTicks(r.ticks) : '' }}</span>
-          <span class="bar"><i :style="{ width: r.progress * 100 + '%', background: r.color }" /></span>
+        <li v-for="r in rows" :key="r.rank" :class="{ done: r.done, you: r.you, focused: hud.focusedRunner === r.index }">
+          <button class="runner" type="button" :disabled="r.done || finished" :aria-pressed="hud.focusedRunner === r.index" :aria-label="'Follow ' + r.name" @click="focusRunner(r.index)">
+            <span class="dot" :style="{ background: r.color }" />
+            <span class="n">{{ r.rank }}</span>
+            <span class="nm">{{ r.name }}</span>
+            <span class="tm">{{ r.done ? formatTicks(r.ticks) : '' }}</span>
+            <span class="bar"><i :style="{ width: r.progress * 100 + '%', background: r.color }" /></span>
+          </button>
         </li>
       </ol>
 
@@ -238,7 +246,7 @@ const finished = computed(() => hud.value.status === 'finished')
   font-weight: 800;
   opacity: 0.94;
 }
-.standings li,
+.runner,
 .final li {
   display: grid;
   grid-template-columns: 10px 14px 1fr auto;
@@ -246,13 +254,26 @@ const finished = computed(() => hud.value.status === 'finished')
   column-gap: 6px;
   padding: 2px 0;
 }
-.standings li .bar {
+.runner .bar {
   grid-column: 1 / -1;
   height: 4px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.14);
   overflow: hidden;
 }
+.runner {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.runner:disabled { cursor: default; }
+.focused .runner { background: var(--line); }
+.runner:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bar i {
   display: block;
   height: 100%;
