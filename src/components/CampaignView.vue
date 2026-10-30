@@ -6,6 +6,8 @@ import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from '../levels'
 import { formatTicks } from '../sim'
 import MedalIcon from './MedalIcon.vue'
 import PageShell from './PageShell.vue'
+import GhostToggle from './GhostToggle.vue'
+import { ghostSettings } from '../game/ghost'
 
 const props = defineProps<{ theme: Theme; progress: ProgressMap; difficulty: Difficulty; focusKey?: string }>()
 const emit = defineEmits<{ exit: []; play: [index: number]; 'update:difficulty': [d: Difficulty] }>()
@@ -96,6 +98,12 @@ onMounted(async () => {
           </span>
         </div>
         <button class="ib" type="button" aria-label="Next difficulty" @click="shift(1)">▶</button>
+      </div>
+    </div>
+
+    <div class="ghost-bar">
+      <div class="ghost-bar-in">
+        <GhostToggle v-model="ghostSettings.self" label="Ghost" title="Race your own best run as a ghost" />
       </div>
     </div>
 
@@ -245,6 +253,20 @@ onMounted(async () => {
   text-align: center;
   font-weight: 700;
   color: var(--muted);
+}
+
+/* Eigener Bestzeit-Ghost – gleiche Schaltfläche wie in Community Levels */
+.ghost-bar {
+  background: var(--panel);
+  border-bottom: 3px solid var(--line);
+}
+
+.ghost-bar-in {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  padding: 7px 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Der Scrollbereich geht über die volle Breite, so sitzt die Scrollleiste am Fensterrand */

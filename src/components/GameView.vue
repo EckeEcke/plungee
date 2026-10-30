@@ -26,10 +26,12 @@ const props = withDefaults(
     shareUrl?: string | null
     /** Zusätzliche Ghosts (Top 5 eines Community-Levels) */
     ghosts?: GhostSpec[]
+    /** Nur Campaign: den eigenen Bestzeit-Ghost anzeigen. */
+    selfGhost?: boolean
     /** Multiplayer: fester gemeinsamer Start, keine lokalen Restarts oder Bestenlisten. */
     multiplayerStartAt?: number | null
   }>(),
-  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [], multiplayerStartAt: null },
+  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [], selfGhost: false, multiplayerStartAt: null },
 )
 const emit = defineEmits<{
   exit: []
@@ -110,6 +112,7 @@ onMounted(() => {
     hud.value = h
   })
   measureInset()
+  game.setSelfGhostEnabled(props.selfGhost)
   game.setRestartEnabled(props.multiplayerStartAt === null)
   game.setStartAt(props.multiplayerStartAt)
   game.load(compileLevel(props.levelData), props.levelKey)

@@ -81,6 +81,7 @@ export class Game {
   private disposed = false
   /** Eigener Ghost der Bestzeit (nur wenn eingeschaltet und vorhanden) */
   private selfGhost: Ghost | null = null
+  private selfGhostEnabled = false
   private otherGhosts: Ghost[] = []
   /** Zuschauermodus: Eingaben des Führenden, die statt der Tastatur die Kamera-Welt steuern */
   private spectator: Int8Array | null = null
@@ -175,10 +176,15 @@ export class Game {
     if (next >= 0) this.focusedRunner = next
   }
 
+  /** Eigene Bestzeit-Ghosts nur in den dafür vorgesehenen Spielmodi anzeigen. */
+  setSelfGhostEnabled(enabled: boolean): void {
+    this.selfGhostEnabled = enabled
+  }
+
   /** Alle Ghosts, die gerade laufen sollen */
   private activeGhosts(): Ghost[] {
     if (this.spectator) return this.otherGhosts
-    return [...(ghostSettings.self && this.selfGhost ? [this.selfGhost] : []), ...this.otherGhosts]
+    return [...(this.selfGhostEnabled && ghostSettings.self && this.selfGhost ? [this.selfGhost] : []), ...this.otherGhosts]
   }
 
   private loadSelfGhost(): void {

@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import EditorView from './components/EditorView.vue'
@@ -123,8 +122,6 @@ async function ghostsFor(id: string): Promise<GhostSpec[]> {
     ])
     if (!res) return []
     return res.entries
-      // Der eigene Eintrag ist schon der eigene Ghost, wenn der an ist
-      .filter((e) => !(e.you && ghostSettings.self))
       .map((e) => ({
         replay: e.replay,
         label: `${e.rank}. ${e.name}`,
@@ -282,6 +279,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     v-if="screen === 'play' && current"
     :key="current.key"
     :level-data="current.data"
+    :self-ghost="true"
     :level-key="current.key"
     :theme="theme"
     :par="current.par"
@@ -434,25 +432,6 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
         >
           <SoundIcon kind="sound" :on="audioSettings.sfx" :size="17" /> Sound
         </button>
-        <button
-          class="snd"
-          :class="{ on: ghostSettings.self }"
-          type="button"
-          role="switch"
-          :aria-checked="ghostSettings.self"
-          title="Race your own best run as a ghost"
-          @click="ghostSettings.self = !ghostSettings.self"
-        >
-          <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true">
-            <path
-              d="M3 14V7a5 5 0 0 1 10 0v7l-2-1.6L9 14l-1-1.6L7 14l-2-1.6z"
-              fill="currentColor"
-            />
-            <circle cx="6" cy="7" r="1.1" :fill="ghostSettings.self ? 'var(--accent)' : 'var(--bg2)'" />
-            <circle cx="10" cy="7" r="1.1" :fill="ghostSettings.self ? 'var(--accent)' : 'var(--bg2)'" />
-          </svg>
-          Ghost
-        </button>
       </div>
 
       <ul class="tips">
@@ -570,18 +549,20 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  animation: edit-hint-flash 3s linear infinite;
+  animation: edit-hint-flash 6s linear infinite;
 }
 
 @keyframes edit-hint-flash {
   0%,
-  18% {
-    opacity: 1;
-  }
-
-  25%,
+  8%,
+  35%,
   100% {
     opacity: 0;
+  }
+
+  14%,
+  29% {
+    opacity: 1;
   }
 }
 
