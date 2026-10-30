@@ -1,12 +1,13 @@
+
 <script setup lang="ts">
 import PageShell from './PageShell.vue'
 import GhostToggle from './GhostToggle.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import type { Theme } from '../game/theme'
 import { ghostSettings } from '../game/ghost'
-import { fetchLevels, loadName, nameProblem, saveName, type LevelSort, type OnlineMeta } from '../online/api'
+import { fetchLevels, type LevelSort, type OnlineMeta } from '../online/api'
 
-const props = defineProps<{ theme: Theme }>()
+defineProps<{ theme: Theme }>()
 const emit = defineEmits<{ exit: []; play: [id: string] }>()
 
 const PAGE = 20
@@ -15,8 +16,7 @@ const levels = ref<OnlineMeta[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
-const name = ref(loadName())
-const nameBad = computed(() => nameProblem(name.value))
+
 /** Verwirft Antworten veralteter Anfragen (schnelles Umschalten der Reiter) */
 let ticket = 0
 
@@ -25,16 +25,21 @@ let offset = 0
 
 async function load(reset: boolean): Promise<void> {
   const mine = ++ticket
+
   if (reset) {
     levels.value = []
     offset = 0
     total.value = 0
   }
+
   loading.value = true
   error.value = ''
+
   try {
     const res = await fetchLevels(sort.value, offset, PAGE)
+
     if (mine !== ticket) return
+
     levels.value = reset ? res.levels : [...levels.value, ...res.levels]
     offset += PAGE
     total.value = res.total
@@ -49,98 +54,187 @@ async function load(reset: boolean): Promise<void> {
 onMounted(() => load(true))
 watch(sort, () => load(true))
 
-const canMore = computed(() => !loading.value && !error.value && offset < total.value)
-
-function onName(e: Event): void {
-  name.value = (e.target as HTMLInputElement).value.slice(0, 16)
-  saveName(name.value)
-}
+const canMore = computed(
+  () => !loading.value && !error.value && offset < total.value,
+)
 
 function ago(ts: number): string {
   const min = Math.max(0, Math.floor((Date.now() - ts) / 60000))
-  if (min < 60) return min <= 1 ? 'just now' : `${min} min ago`
+
+  if (min < 60) {
+    return min <= 1 ? 'just now' : `${min} min ago`
+  }
+
   const h = Math.floor(min / 60)
+
   if (h < 24) return `${h} h ago`
+
   const d = Math.floor(h / 24)
+
   return d < 30 ? `${d} d ago` : new Date(ts).toLocaleDateString()
 }
 
-const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', long: 'Long' }
+const SIZE_TEXT: Record<string, string> = {
+  short: 'Short',
+  medium: 'Medium',
+  long: 'Long',
+}
 </script>
 
 <template>
   <PageShell :theme="theme">
-  <div class="community">
-    <header class="top">
-      <div class="top-in">
-        <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
-        <div class="title">
-          <b>Community levels</b>
-          <small>Built by players</small>
+    <div class="community">
+      <header class="top">
+        <div class="top-in">
+          <button
+            class="ib"
+            type="button"
+            aria-label="Back to menu"
+            @click="emit('exit')"
+          >
+            ←
+          </button>
+
+          <div class="title">
+            <b>Community levels</b>
+            <small>Built by players</small>
+          </div>
+        </div>
+      </header>
+
+      <div class="bar">
+        <div class="bar-in">
+          <div class="tabs" role="group" aria-label="Sort">
+            <button
+              type="button"
+              :class="{ on: sort === 'new' }"
+              :aria-pressed="sort === 'new'"
+              @click="sort = 'new'"
+            >
+              Newest
+            </button>
+
+            <button
+              type="button"
+              :class="{ on: sort === 'plays' }"
+              :aria-pressed="sort === 'plays'"
+              @click="sort = 'plays'"
+            >
+              Most played
+            </button>
+          </div>
+
+          <div class="ghosts">
+            <GhostToggle
+              v-model="ghostSettings.top"
+              label="Ghosts"
+              title="Race the replays of the five best players"
+            />
+          </div>
         </div>
       </div>
-    </header>
 
-    <div class="bar">
-      <div class="bar-in">
-        <div class="tabs" role="group" aria-label="Sort">
-          <button type="button" :class="{ on: sort === 'new' }" :aria-pressed="sort === 'new'" @click="sort = 'new'">
-            Newest
-          </button>
-          <button type="button" :class="{ on: sort === 'plays' }" :aria-pressed="sort === 'plays'" @click="sort = 'plays'">
-            Most played
-          </button>
-        </div>
-        <label class="name">
-          <span>Your name</span>
-          <input type="text" maxlength="16" placeholder="Anonymous" :value="name" :aria-invalid="nameBad ? 'true' : undefined" @input="onName" />
-        </label>
-        <p v-if="nameBad" class="bad">{{ nameBad }}</p>
-        <div class="ghosts">
-          <GhostToggle v-model="ghostSettings.top" label="Top 5 ghosts" title="Race the replays of the five best players" />
-        </div>
-      </div>
-    </div>
+      <div class="scroll">
+        <ul class="list">
+          <li
+            v-for="l in levels"
+            :key="l.id"
+            class="item"
+          >
+            <button
+              class="play"
+              type="button"
+              @click="emit('play', l.id)"
+            >
+              <span class="t">{{ l.title }}</span>
 
-    <div class="scroll">
-      <ul class="list">
-        <li v-for="l in levels" :key="l.id" class="item">
-          <button class="play" type="button" @click="emit('play', l.id)">
-            <span class="t">{{ l.title }}</span>
-            <span class="m">by {{ l.author }} · {{ SIZE_TEXT[l.size] ?? l.size }} · {{ ago(l.createdAt) }}</span>
-            <span class="p">
-              <span>▶ {{ l.plays }} {{ l.plays === 1 ? 'play' : 'plays' }}</span>
-              <span v-if="l.firstClear" class="fc" :title="`First clear by ${l.firstClear.name}`">
-                <svg class="flag" viewBox="0 0 12 14" aria-hidden="true">
-                  <path d="M2 1v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" />
-                  <path d="M2.8 1.6h7.2l-2 2.7 2 2.7H2.8z" fill="currentColor" />
-                </svg>
-                <span class="fc-name">{{ l.firstClear.name }}</span>
+              <span class="m">
+                by {{ l.author }} ·
+                {{ SIZE_TEXT[l.size] ?? l.size }} ·
+                {{ ago(l.createdAt) }}
               </span>
-            </span>
-          </button>
-        </li>
-      </ul>
 
-      <p v-if="loading" class="note">Loading …</p>
-      <div v-else-if="error" class="note err">
-        <p>{{ error }}</p>
-        <button class="more" type="button" @click="load(levels.length === 0)">Try again</button>
+              <span class="p">
+                <span>
+                  ▶ {{ l.plays }} {{ l.plays === 1 ? 'play' : 'plays' }}
+                </span>
+
+                <span
+                  v-if="l.firstClear"
+                  class="fc"
+                  :title="`First clear by ${l.firstClear.name}`"
+                >
+                  <svg
+                    class="flag"
+                    viewBox="0 0 12 14"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M2 1v12"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      fill="none"
+                    />
+                    <path
+                      d="M2.8 1.6h7.2l-2 2.7 2 2.7H2.8z"
+                      fill="currentColor"
+                    />
+                  </svg>
+
+                  <span class="fc-name">
+                    {{ l.firstClear.name }}
+                  </span>
+                </span>
+              </span>
+            </button>
+          </li>
+        </ul>
+
+        <p v-if="loading" class="note">
+          Loading …
+        </p>
+
+        <div v-else-if="error" class="note err">
+          <p>{{ error }}</p>
+
+          <button
+            class="more"
+            type="button"
+            @click="load(levels.length === 0)"
+          >
+            Try again
+          </button>
+        </div>
+
+        <p v-else-if="levels.length === 0" class="note">
+          No levels here yet. Build one and upload it from the editor!
+        </p>
+
+        <button
+          v-if="canMore"
+          class="more"
+          type="button"
+          @click="load(false)"
+        >
+          Show more
+        </button>
       </div>
-      <p v-else-if="levels.length === 0" class="note">No levels here yet. Build one and upload it from the editor!</p>
-      <button v-if="canMore" class="more" type="button" @click="load(false)">Show more</button>
     </div>
-  </div>
   </PageShell>
 </template>
 
 <style scoped>
+/* Layout */
+
 .community {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
+
+/* Header */
 
 .top,
 .bar {
@@ -159,12 +253,6 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
 
 .top-in {
   padding: max(10px, env(safe-area-inset-top)) 12px 10px;
-}
-
-.bar-in {
-  padding: 10px 12px;
-  justify-content: space-between;
-  flex-wrap: wrap;
 }
 
 .ib {
@@ -194,6 +282,14 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   color: var(--muted);
 }
 
+/* Sort and ghosts */
+
+.bar-in {
+  padding: 10px 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
 .tabs {
   display: flex;
   gap: 4px;
@@ -219,41 +315,11 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   background: var(--accent);
 }
 
-.name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--muted);
-}
-
-.name input {
-  width: 110px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 5px 8px;
-  color: var(--text);
-  background: transparent;
-  border: 2px solid var(--line);
-  border-radius: 10px;
-}
-
 .ghosts {
-  flex-basis: 100%;
-  display: flex;
-  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
-.bad {
-  flex-basis: 100%;
-  margin: 0;
-  text-align: right;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--accent);
-}
+/* Level list */
 
 .scroll {
   flex: 1;
@@ -298,6 +364,8 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   box-shadow: 2px 2px 0 var(--outline);
 }
 
+/* Level details */
+
 .t {
   font-size: 17px;
   font-weight: 900;
@@ -307,12 +375,21 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   white-space: nowrap;
 }
 
+.m,
+.p {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
 .p {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
 }
+
+/* First clear */
 
 .fc {
   display: inline-flex;
@@ -334,12 +411,7 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   white-space: nowrap;
 }
 
-.m,
-.p {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
-}
+/* Loading, errors and pagination */
 
 .note {
   width: min(100%, 520px);
@@ -368,7 +440,19 @@ const SIZE_TEXT: Record<string, string> = { short: 'Short', medium: 'Medium', lo
   box-shadow: 3px 3px 0 var(--outline);
 }
 
-/* Im breiten Container sitzen die Kopfzeilen links wie bei den anderen Seiten */
+/* Responsive */
+
+@media (max-width: 380px) {
+  .bar-in {
+    gap: 6px;
+  }
+
+  .tabs button {
+    font-size: 12px;
+    padding: 5px 7px;
+  }
+}
+
 @media (min-width: 600px) {
   .top-in,
   .bar-in {

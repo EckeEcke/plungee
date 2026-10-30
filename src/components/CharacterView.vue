@@ -1,16 +1,41 @@
+
 <script setup lang="ts">
 import PageShell from './PageShell.vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { themeById, type Theme } from '../game/theme'
-import { applyLook, COLORS, DEFAULT_LOOK, EYES, look, PATTERN_COLORS, PATTERNS, randomLook } from '../game/look'
+import {
+  applyLook,
+  COLORS,
+  DEFAULT_LOOK,
+  EYES,
+  look,
+  PATTERN_COLORS,
+  PATTERNS,
+  randomLook,
+} from '../game/look'
+import { loadName, nameProblem, saveName } from '../online/api'
 import CharacterCanvas from './CharacterCanvas.vue'
 
 const props = defineProps<{ theme: Theme }>()
 const emit = defineEmits<{ exit: [] }>()
 
+// Player name
+
+const playerName = ref(loadName())
+const nameError = computed(() => nameProblem(playerName.value))
+
+function onNameInput(event: Event): void {
+  playerName.value = (event.target as HTMLInputElement).value.slice(0, 16)
+
+  if (!nameError.value) {
+    saveName(playerName.value)
+  }
+}
+
 /**
- * props.theme enthält die gewählte Körperfarbe schon (App.vue wendet sie an). Die Farbfelder brauchen aber
- * das Theme ohne Auswahl, sonst zeigt „Pink“ immer die aktuell gewählte Farbe und setzt beim Klick auf Pink zurück.
+ * props.theme enthält die gewählte Körperfarbe schon (App.vue wendet sie an).
+ * Die Farbfelder brauchen aber das Theme ohne Auswahl, sonst zeigt „Pink“
+ * immer die aktuell gewählte Farbe und setzt beim Klick auf Pink zurück.
  */
 const base = computed(() => themeById(props.theme.id))
 
@@ -21,7 +46,10 @@ function swatch(id: string): { background: string } {
   const c = COLORS.find((o) => o.id === id)!
   const body = c.body ?? base.value.player
   const shade = c.shade ?? base.value.playerShade
-  return { background: `linear-gradient(180deg, ${body} 65%, ${shade} 65%)` }
+
+  return {
+    background: `linear-gradient(180deg, ${body} 65%, ${shade} 65%)`,
+  }
 }
 
 /** Farbfeld für die Musterfarbe; „Dark“ folgt der Konturfarbe des Themes */
@@ -36,77 +64,130 @@ function reset(): void {
 function randomize(): void {
   Object.assign(look, randomLook(Math.random, { ...look }))
 }
-
 </script>
 
 <template>
   <PageShell :theme="theme">
-  <div class="chr-page">
-    <header class="top">
-      <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
-      <div class="title">
-        <b>Character</b>
-        <small>Make it yours</small>
-      </div>
-    </header>
+    <div class="chr-page">
+      <header class="top">
+        <button
+          class="ib"
+          type="button"
+          aria-label="Back to menu"
+          @click="emit('exit')"
+        >
+          ←
+        </button>
 
-    <div class="scroll">
-      <div class="col">
-        <section class="stage">
-          <CharacterCanvas :colors="themed" :look="look" :size="168" />
-        </section>
+        <div class="title">
+          <b>Character</b>
+          <small>Make it yours</small>
+        </div>
+      </header>
 
-        <section class="opts">
-          <h3>Color</h3>
-          <div class="swatches" role="radiogroup" aria-label="Color">
-            <button
-              v-for="c in COLORS"
-              :key="c.id"
-              type="button"
-              role="radio"
-              class="sw"
-              :class="{ on: look.color === c.id }"
-              :aria-checked="look.color === c.id"
-              :aria-label="c.label"
-              :title="c.label"
-              :style="swatch(c.id)"
-              @click="look.color = c.id"
+      <div class="scroll">
+        <div class="col">
+          <section class="stage">
+            <CharacterCanvas
+              :colors="themed"
+              :look="look"
+              :size="168"
             />
-          </div>
 
-          <h3>Eyes</h3>
-          <div class="chips" role="radiogroup" aria-label="Eyes">
-            <button
-              v-for="o in EYES"
-              :key="o.id"
-              type="button"
-              role="radio"
-              :class="{ on: look.eyes === o.id }"
-              :aria-checked="look.eyes === o.id"
-              @click="look.eyes = o.id"
+            <label class="player-name">
+              <span>Player name</span>
+              <input
+                type="text"
+                maxlength="16"
+                placeholder="Your name"
+                autocomplete="nickname"
+                :value="playerName"
+                @input="onNameInput"
+              />
+            </label>
+
+            <p
+              v-if="nameError"
+              class="name-error"
+              role="alert"
             >
-              {{ o.label }}
-            </button>
-          </div>
+              {{ nameError }}
+            </p>
+          </section>
 
-          <h3>Pattern</h3>
-          <div class="chips" role="radiogroup" aria-label="Pattern">
-            <button
-              v-for="o in PATTERNS"
-              :key="o.id"
-              type="button"
-              role="radio"
-              :class="{ on: look.pattern === o.id }"
-              :aria-checked="look.pattern === o.id"
-              @click="look.pattern = o.id"
+          <section class="opts">
+            <h3>Color</h3>
+
+            <div
+              class="swatches"
+              role="radiogroup"
+              aria-label="Color"
             >
-              {{ o.label }}
-            </button>
-          </div>
+              <button
+                v-for="c in COLORS"
+                :key="c.id"
+                type="button"
+                role="radio"
+                class="sw"
+                :class="{ on: look.color === c.id }"
+                :aria-checked="look.color === c.id"
+                :aria-label="c.label"
+                :title="c.label"
+                :style="swatch(c.id)"
+                @click="look.color = c.id"
+              />
+            </div>
 
-          <template v-if="look.pattern !== 'none'">
-            <h3>Pattern color</h3>
-            <div class="swatches" role="radiogroup" aria-label="Pattern color">
+            <h3>Eyes</h3>
+
+            <div
+              class="chips"
+              role="radiogroup"
+              aria-label="Eyes"
+            >
+              <button
+                v-for="o in EYES"
+                :key="o.id"
+                type="button"
+                role="radio"
+                :class="{ on: look.eyes === o.id }"
+                :aria-checked="look.eyes === o.id"
+                @click="look.eyes = o.id"
+              >
+                {{ o.label }}
+              </button>
+            </div>
+
+            <h3>Pattern</h3>
+
+            <div
+              class="chips"
+              role="radiogroup"
+              aria-label="Pattern"
+            >
+              <button
+                v-for="o in PATTERNS"
+                :key="o.id"
+                type="button"
+                role="radio"
+                :class="{ on: look.pattern === o.id }"
+                :aria-checked="look.pattern === o.id"
+                @click="look.pattern = o.id"
+              >
+                {{ o.label }}
+              </button>
+            </div>
+
+            <h3 :class="{ disabled: look.pattern === 'none' }">
+              Pattern color
+            </h3>
+
+            <div
+              class="swatches"
+              role="radiogroup"
+              aria-label="Pattern color"
+              :aria-disabled="look.pattern === 'none'"
+            >
               <button
                 v-for="c in PATTERN_COLORS"
                 :key="c.id"
@@ -118,23 +199,38 @@ function randomize(): void {
                 :aria-label="c.label"
                 :title="c.label"
                 :style="patternSwatch(c.hex)"
+                :disabled="look.pattern === 'none'"
                 @click="look.patternColor = c.id"
               />
             </div>
-          </template>
-        </section>
+          </section>
 
-        <div class="actions">
-          <button class="reset" type="button" @click="randomize">🎲 Randomize</button>
-          <button class="reset" type="button" @click="reset">Reset to default</button>
+          <div class="actions">
+            <button
+              class="reset"
+              type="button"
+              @click="randomize"
+            >
+              🎲 Randomize
+            </button>
+
+            <button
+              class="reset"
+              type="button"
+              @click="reset"
+            >
+              Reset to default
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
   </PageShell>
 </template>
 
 <style scoped>
+/* Layout */
+
 .chr-page {
   flex: 1;
   min-height: 0;
@@ -176,6 +272,8 @@ function randomize(): void {
   color: var(--muted);
 }
 
+/* Content */
+
 .scroll {
   flex: 1;
   min-height: 0;
@@ -205,6 +303,39 @@ function randomize(): void {
   gap: 10px;
 }
 
+/* Player name */
+
+.player-name {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 240px);
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.player-name input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 5px 8px;
+  color: var(--text);
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+}
+
+.name-error {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Option headings */
+
 h3 {
   margin: 14px 0 8px;
   font-size: 12px;
@@ -217,6 +348,12 @@ h3 {
 h3:first-child {
   margin-top: 0;
 }
+
+h3.disabled {
+  opacity: 0.35;
+}
+
+/* Color swatches */
 
 .swatches {
   display: flex;
@@ -236,6 +373,13 @@ h3:first-child {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
+
+.sw:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Eye and pattern selection */
 
 .chips {
   display: flex;
@@ -260,6 +404,8 @@ h3:first-child {
   background: var(--accent);
   border-color: var(--outline);
 }
+
+/* Actions */
 
 .actions {
   display: flex;
