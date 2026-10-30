@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { startMusic, stopMusic } from '../audio/audio'
 import { Game, type HudState } from '../game/game'
 import { GHOST_COLORS, type GhostSpec } from '../game/ghost'
@@ -93,24 +93,19 @@ function focusRunner(index: number): void {
   game?.focusRunner(index)
 }
 
-/** Show the title during the existing pre-replay wait, without delaying the race. */
+/** The multiplayer intro stays visible until playback begins, with no numeric countdown. */
 function cueReplayIntro(startAt: number | null): void {
   clearTimeout(replayIntroTimer)
   const remaining = startAt === null ? 0 : startAt - Date.now()
-  showReplayIntro.value = props.multiplayer && remaining > 600
+  showReplayIntro.value = props.multiplayer && remaining > 0
   if (showReplayIntro.value) {
     replayIntroTimer = setTimeout(() => {
       showReplayIntro.value = false
-    }, Math.min(1500, remaining))
+    }, remaining)
   }
 }
 
 function replay(): void {
-  if (props.multiplayer) {
-    const startAt = Date.now() + 2000
-    game?.setStartAt(startAt)
-    cueReplayIntro(startAt)
-  }
   game?.restart()
 }
 
@@ -142,6 +137,10 @@ onBeforeUnmount(() => {
 })
 
 const finished = computed(() => hud.value.status === 'finished')
+// In multiplayer the results already show every player's time: no replay result screen.
+watch(finished, (done: boolean) => {
+  if (done && props.multiplayer) emit('exit')
+})
 </script>
 
 <template>
@@ -154,7 +153,7 @@ const finished = computed(() => hud.value.status === 'finished')
         <span v-if="multiplayer && hud.status === 'running'" class="pill replay-badge">▶ REPLAY</span>
         <span v-else class="pill title">{{ multiplayer ? 'Multiplayer' : 'Last week' }} · {{ race.title }}</span>
         <span class="spacer" />
-        <button class="pill btn" type="button" aria-label="Watch again" @click="replay">↻</button>
+        <button v-if="!multiplayer" class="pill btn" type="button" aria-label="Watch again" @click="replay">↻</button>
         <button class="pill btn" type="button" :aria-label="multiplayer ? 'Results' : 'Back'" @click="emit('exit')">✕</button>
       </div>
 
@@ -170,7 +169,7 @@ const finished = computed(() => hud.value.status === 'finished')
         </li>
       </ol>
 
-      <div v-if="hud.status === 'ready' && !failed && !showReplayIntro" class="countdown" aria-live="assertive">
+      <div v-if="!multiplayer && hud.status === 'ready' && !failed" class="countdown" aria-live="assertive">
         <span :key="hud.countdown">{{ hud.countdown }}</span>
       </div>
 
@@ -189,7 +188,7 @@ const finished = computed(() => hud.value.status === 'finished')
       </div>
 
       <Transition name="fade">
-        <div v-if="finished" class="result" data-noinput>
+        <div v-if="finished && !multiplayer" class="result" data-noinput>
           <div class="card">
             <div class="head">Race finished</div>
             <ol class="final">

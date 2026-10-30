@@ -260,7 +260,8 @@ export class Game {
         const cd = Math.ceil(this.countdownMs / COUNTDOWN_STEP_MS)
         if (cd !== this.lastCountdown) {
           this.lastCountdown = cd
-          if (cd <= 3) playSfx('countdown')
+          // The multiplayer replay uses its own intro instead of a countdown.
+          if (!this.spectator || this.scheduledStartAt === null) playSfx('countdown')
         }
       }
       this.emitHud()
@@ -281,10 +282,13 @@ export class Game {
       this.emitHud()
     }
 
-    this.renderer.update(dtMs / 1000, this.spectator
+    // The first runner's world freezes when they finish. Render the actively
+    // followed runner's world so hazards and speedlines keep updating.
+    const displayWorld = this.spectator
       ? (this.otherGhosts[this.focusedRunner]?.world ?? this.world)
-      : this.world)
-    this.renderer.draw(this.world, this.status === 'running' ? this.acc / STEP_MS : 0, this.status === 'running', this.activeGhosts())
+      : this.world
+    this.renderer.update(dtMs / 1000, displayWorld)
+    this.renderer.draw(displayWorld, this.status === 'running' ? this.acc / STEP_MS : 0, this.status === 'running', this.activeGhosts())
   }
 
   private finish(): void {
@@ -314,7 +318,7 @@ export class Game {
 
   /** Laser-Takt und Geräusche der Untergründe; Laser nur, wenn sie im Bild liegen */
   private ambientSounds(): void {
-    const w = this.world
+    const w = this.spectator ? (this.otherGhosts[this.focusedRunner]?.world ?? this.world) : this.world
     const lasers = this.level.lasers
     for (let i = 0; i < lasers.length; i++) {
       const ph = laserPhase(lasers[i], w.tick)
@@ -352,12 +356,13 @@ export class Game {
 
   private emitHud(): void {
     const lv = this.level
-    const p = this.world.p
+    const displayWorld = this.spectator ? (this.otherGhosts[this.focusedRunner]?.world ?? this.world) : this.world
+    const p = displayWorld.p
     const progress = Math.max(0, Math.min(1, (p.y + PLAYER_H) / lv.height))
     this.onHud({
       status: this.status,
-      ticks: this.world.finished ? this.world.finishTick : this.world.tick,
-      deaths: this.world.deaths,
+      ticks: displayWorld.finished ? displayWorld.finishTick : displayWorld.tick,
+      deaths: displayWorld.deaths,
       progress: this.status === 'finished' ? 1 : progress,
       countdown: this.status === 'ready' ? Math.min(3, Math.max(1, Math.ceil(this.countdownMs / COUNTDOWN_STEP_MS))) : 0,
       bestTicks: this.bestTicks,

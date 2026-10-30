@@ -42,8 +42,6 @@ const match = ref<MatchState>(emptyMatch())
 const namesById = ref<Record<string, string>>({})
 const looksById = ref<Record<string, Look>>({})
 const showResults = ref(false)
-const replayAgainAt = ref<number | null>(null)
-const replayCycle = ref(0)
 const pendingReplay = ref<string | null>(null)
 const raceLevel = computed(() => LEVELS.find(l => l.key === match.value.round?.levelKey))
 const allFinished = computed(() => {
@@ -148,7 +146,6 @@ function restoreState(next: MatchState): void {
   const prior = match.value.round
   if (next.round?.number !== prior?.number) {
     showResults.value = false
-    replayAgainAt.value = null
     pendingReplay.value = null
   }
   if (next.round && prior?.number === next.round.number && prior.levelKey === next.round.levelKey) {
@@ -198,7 +195,7 @@ function recordFinish(id: string, replay: string, roundNumber: number): void {
   } catch { return }
   const results = { ...r.results, [id]: result }
   const complete = r.playerIds.every(pid => !!results[pid])
-  const replayAt = complete ? Date.now() + 5000 : r.replayAt
+  const replayAt = complete ? Date.now() + 2000 : r.replayAt
   match.value = { ...match.value, round: { ...r, results, replayAt } }
   try { session?.send({ kind: 'result', playerId: id, round: roundNumber, result }) }
   catch (e) { error.value = e instanceof Error ? e.message : 'Could not send race result' }
@@ -244,7 +241,6 @@ function resetLobby(reason: string): void {
   match.value = emptyMatch()
   pendingReplay.value = null
   showResults.value = false
-  replayAgainAt.value = null
   status.value = 'idle'
   history.replaceState(null, '', location.pathname)
   error.value = reason
@@ -277,7 +273,7 @@ function onPlayers(next: LobbyPlayer[]): void {
       }
       const complete = r.playerIds.every(id => !!results[id])
       const hasReplay = Object.values(results).some(result => result.finished)
-      const replayAt = r.replayAt ?? (complete && hasReplay ? Date.now() + 5000 : null)
+      const replayAt = r.replayAt ?? (complete && hasReplay ? Date.now() + 2000 : null)
       match.value = { ...match.value, round: { ...r, results, replayAt } }
     }
     commit()
@@ -318,7 +314,6 @@ async function leave(): Promise<void> {
   players.value = []
   pendingReplay.value = null
   showResults.value = false
-  replayAgainAt.value = null
   match.value = emptyMatch()
   history.replaceState(null, '', location.pathname)
   emit('exit')
@@ -362,7 +357,6 @@ function startMatch(): void {
     round: { number: 1, levelKey: level.key, startAt: Date.now() + 3000, replayAt: null, playerIds: ids, results: {} },
   }
   showResults.value = false
-  replayAgainAt.value = null
   commit()
 }
 function nextRound(): void {
@@ -378,7 +372,6 @@ function nextRound(): void {
     round: { number: previous.number + 1, levelKey: level.key, startAt: Date.now() + 3000, replayAt: null, playerIds: ids, results: {} },
   }
   showResults.value = false
-  replayAgainAt.value = null
   pendingReplay.value = null
   commit()
 }
@@ -390,7 +383,6 @@ function finishMatch(): void {
     completed: true,
   }
   showResults.value = true
-  replayAgainAt.value = null
   commit()
 }
 function sendFinish(replay: string): void {
@@ -398,12 +390,6 @@ function sendFinish(replay: string): void {
   if (!round) return
   try { session?.send({ kind: 'finish', playerId, round: round.number, replay }); error.value = '' }
   catch (e) { error.value = e instanceof Error ? e.message : 'Could not send race recording' }
-}
-function watchReplay(): void {
-  if (!replayRace.value) return
-  replayAgainAt.value = Date.now() + 2000
-  replayCycle.value++
-  showResults.value = false
 }
 function finishReplay(): void {
   showResults.value = true
@@ -421,11 +407,11 @@ onBeforeUnmount(() => { session?.close() })
   <PageShell :theme="theme">
     <RaceView
       v-if="match.started && match.round && allFinished && replayRace && !showResults"
-      :key="'multiplayer-replay-' + room + '-' + match.round.number + '-' + replayCycle"
+      :key="'multiplayer-replay-' + room + '-' + match.round.number"
       :theme="theme"
       :race="replayRace"
       :ghosts="replayGhosts"
-      :replay-start-at="replayAgainAt ?? match.round.replayAt"
+      :replay-start-at="match.round.replayAt"
       multiplayer
       @exit="finishReplay"
     />
@@ -455,7 +441,7 @@ onBeforeUnmount(() => { session?.close() })
         <section class="panel results-panel">
           <div class="section-head"><div><b>{{ match.completed ? 'FINAL STANDINGS' : 'OVERALL STANDINGS' }}</b><small>Points across {{ match.completed ? match.settings.rounds : match.round.number }} races</small></div></div>
           <ol class="results-list"><li v-for="(entry, i) in overallStandings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.totals.points }} pts</b><small>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small></li></ol>
-          <button v-if="replayRace" class="cta" type="button" @click="watchReplay">Watch replay</button>
+
           <button v-if="isHost && !match.completed" class="cta" type="button" @click="isFinalRound ? finishMatch() : nextRound()">{{ isFinalRound ? 'Show final standings' : 'Next race ▶' }}</button>
           <small v-else-if="!isHost && !match.completed">{{ isFinalRound ? 'Waiting for the host to show the final standings…' : 'Waiting for the host to start the next race…' }}</small>
         </section>

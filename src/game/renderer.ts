@@ -1264,7 +1264,7 @@ export class Renderer {
 
   private drawSpeedlines(ctx: CanvasRenderingContext2D, world: World): void {
     const p = world.p
-    if (p.dead || p.vy < 230) return
+    if (world.finished || p.dead || p.vy < 230) return
     const k = clamp((p.vy - 230) / (TERMINAL_VY - 230), 0, 1)
     const step = Math.floor(this.time * 30)
     ctx.save()
