@@ -549,7 +549,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  animation: edit-hint-flash 6s linear infinite;
+  animation: edit-hint-flash 10s linear infinite;
 }
 
 @keyframes edit-hint-flash {
