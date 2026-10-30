@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import PageShell from './PageShell.vue'
@@ -7,7 +6,7 @@ import RaceView from './RaceView.vue'
 import type { GhostSpec } from '../game/ghost'
 import { LEVELS } from '../levels'
 import { compileLevel, decodeInputs, formatTicks, simulate } from '../sim'
-import { addRoundTotals, compareTotals, roundPoints } from '../multiplayer/scoring'
+import { addRoundTotals, compareTotals, roundPlacements, roundPoints } from '../multiplayer/scoring'
 import CharacterCanvas from './CharacterCanvas.vue'
 import SkullIcon from './SkullIcon.vue'
 import { playSfx } from '../audio/audio'
@@ -59,7 +58,6 @@ function beginGameOverIntro(): void {
   clearGameOverIntro()
   showGameOverIntro.value = true
   playSfx('hammer')
-
   gameOverTimer = setTimeout(() => {
     showGameOverIntro.value = false
     gameOverTimer = null
@@ -84,6 +82,8 @@ const allFinished = computed(() => {
 })
 const currentPoints = computed(() => match.value.round && allFinished.value
   ? roundPoints(match.value.round) : {})
+const currentPlaces = computed(() => match.value.round && allFinished.value
+  ? roundPlacements(match.value.round) : {})
 const cumulativeTotals = computed(() => {
   const r = match.value.round
   return r && allFinished.value && !match.value.completed
@@ -532,7 +532,6 @@ onBeforeUnmount(() => {
   session?.close()
 })
 </script>
-
 <template>
   <PageShell :theme="theme">
     <div v-if="showGameOverIntro" class="game-over-screen" aria-live="polite">
@@ -572,7 +571,7 @@ onBeforeUnmount(() => {
       <div class="scroll"><div class="content">
         <section v-if="!match.completed" class="panel results-panel">
           <div class="section-head"><div><b>FINISH ORDER</b><small>Race {{ match.round.number }} of {{ match.settings.rounds }}</small></div></div>
-          <ol class="results-list"><li v-for="(entry, i) in standings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.result?.finished ? formatTicks(entry.result.ticks) : 'DNF' }}</b><small>+{{ currentPoints[entry.id] ?? 0 }} pts</small></li></ol>
+          <ol class="results-list"><li v-for="(entry, i) in standings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ currentPlaces[entry.id] ?? i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.result?.finished ? formatTicks(entry.result.ticks) : 'DNF' }}</b><small>+{{ currentPoints[entry.id] ?? 0 }} pts</small></li></ol>
         </section>
         <section class="panel results-panel">
           <div class="section-head"><div><b>{{ match.completed ? 'FINAL STANDINGS' : 'OVERALL STANDINGS' }}</b><small>Points across {{ match.completed ? match.settings.rounds : match.round.number }} races</small></div></div>
