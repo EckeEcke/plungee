@@ -275,7 +275,6 @@ function restoreState(next: MatchState): void {
     return
   }
 
-  // Retain previously delivered individual replay events only within the same round.
   const prior = match.value.round
 
   if (next.round?.number !== prior?.number) {
@@ -456,7 +455,6 @@ function onMessage(message: LobbyEvent): void {
     if (isHost.value) {
       broadcast()
 
-      // Re-send individual recordings after a reconnect.
       const r = match.value.round
 
       if (r) {
@@ -564,7 +562,6 @@ function onPlayers(next: LobbyPlayer[]): void {
       readyIds: match.value.readyIds.filter(id => active.has(id)),
     }
 
-    // Disconnects during a race count as unfinished results.
     const r = match.value.round
 
     if (r) {
@@ -747,7 +744,6 @@ function chooseLevel(
     return null
   }
 
-  // Avoid repeats while enough different levels remain.
   const fresh = pool.filter(l => !played.includes(l.key))
   const available = fresh.length ? fresh : pool
 
@@ -1147,7 +1143,7 @@ onBeforeUnmount(() => {
         <div class="content">
           <section
             v-if="room"
-            class="stage"
+            class="lobby-stage"
             aria-label="Animated multiplayer lobby"
           >
             <div class="stage-top">
@@ -1534,7 +1530,7 @@ onBeforeUnmount(() => {
 /* Panels */
 
 .panel,
-.stage {
+.lobby-stage {
   background: var(--panel);
   border: 3px solid var(--line);
   box-shadow: 4px 4px 0 var(--outline);
@@ -1548,9 +1544,7 @@ onBeforeUnmount(() => {
   border-radius: 20px;
 }
 
-/* Lobby stage stays square like the game areas. */
-
-.stage {
+.lobby-stage {
   border-radius: 0;
 }
 
