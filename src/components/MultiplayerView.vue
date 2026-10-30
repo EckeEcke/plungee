@@ -86,6 +86,24 @@ const podium = computed(() => overallStandings.value.slice(0, 3).map((entry, ind
   place: index + 1,
   look: sanitizeLook(looksById.value[entry.id]),
 })))
+// Decorative only: one confetti burst when the final podium is mounted.
+const podiumConfetti = Array.from({ length: 20 }, (_, index) => {
+  const direction = (index / 20) * Math.PI * 2
+  const distance = 65 + (index % 5) * 19
+
+  return {
+    id: index,
+    style: {
+      '--burst-x': `${Math.round(Math.cos(direction) * distance)}px`,
+      '--burst-y': `${Math.round(Math.sin(direction) * distance - 45)}px`,
+      '--fall-x': `${Math.round(Math.cos(direction) * (distance + 35))}px`,
+      '--fall-y': `${110 + (index % 4) * 23}px`,
+      '--spin': `${180 + index * 37}deg`,
+      '--delay': `${(index % 5) * 0.055}s`,
+    },
+  }
+})
+
 const isFinalRound = computed(() => (match.value.round?.number ?? 0) >= match.value.settings.rounds)
 const standings = computed(() => {
   const r = match.value.round
@@ -520,6 +538,13 @@ onBeforeUnmount(() => {
         <section class="panel results-panel">
           <div class="section-head"><div><b>{{ match.completed ? 'FINAL STANDINGS' : 'OVERALL STANDINGS' }}</b><small>Points across {{ match.completed ? match.settings.rounds : match.round.number }} races</small></div></div>
           <div v-if="match.completed" class="podium" aria-label="Top three players">
+            <div class="podium-confetti" aria-hidden="true">
+              <span
+                v-for="piece in podiumConfetti"
+                :key="piece.id"
+                :style="piece.style"
+              ></span>
+            </div>
             <div
               v-for="entry in podium"
               :key="entry.id"
@@ -528,11 +553,13 @@ onBeforeUnmount(() => {
             >
               <span class="podium-honor">{{ entry.place === 1 ? '★ WINNER ★' : '' }}</span>
               <div class="podium-character">
-                <CharacterCanvas
-                  :colors="applyLook(theme, entry.look)"
-                  :look="entry.look"
-                  :size="entry.place === 1 ? 88 : 66"
-                />
+                <div class="podium-figure" :class="{ 'podium-figure-winner': entry.place === 1 }">
+                  <CharacterCanvas
+                    :colors="applyLook(theme, entry.look)"
+                    :look="entry.look"
+                    :size="entry.place === 1 ? 88 : 66"
+                  />
+                </div>
               </div>
               <div class="podium-step">
                 <strong>{{ entry.place }}</strong>
@@ -541,7 +568,24 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-          <ol class="results-list"><li v-for="(entry, i) in overallStandings" :key="entry.id" :class="{ self: entry.id === playerId }"><strong>{{ i + 1 }}.</strong><span>{{ entry.name }}</span><b>{{ entry.totals.points }} pts</b><small>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small></li></ol>
+          <ol class="results-list">
+            <li
+              v-for="(entry, i) in overallStandings"
+              :key="entry.id"
+              :class="{ self: entry.id === playerId }"
+            >
+              <strong>{{ i + 1 }}.</strong>
+              <span>{{ entry.name }}</span>
+              <b>{{ entry.totals.points }} pts</b>
+              <div v-if="match.completed" class="final-stats">
+                <small>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small>
+                <small class="final-deaths" :aria-label="`${entry.totals.deaths} deaths`">
+                  💀 × {{ entry.totals.deaths }}
+                </small>
+              </div>
+              <small v-else>{{ entry.totals.dnfs ? entry.totals.dnfs + ' DNF' : formatTicks(entry.totals.ticks) }}</small>
+            </li>
+          </ol>
 
           <button
             v-if="isHost && !match.completed"
@@ -1276,6 +1320,25 @@ input {
   font-size: 12px;
 }
 
+/* Final results: cumulative time and deaths share the right column. */
+.final-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.final-stats small {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.final-stats .final-deaths {
+  font-size: 11px;
+}
+
 /* Match-end intro: same arcade card and bounce as FINISH! in RaceView. */
 .game-over-screen {
   flex: 1;
@@ -1335,11 +1398,70 @@ input {
 }
 
 .podium {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
   gap: 8px;
   padding-top: 6px;
+}
+
+/* A single Memphis confetti burst, without JS timers or external assets. */
+.podium-confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.podium-confetti span {
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  width: 9px;
+  height: 13px;
+  background: var(--c0);
+  opacity: 0;
+  animation: podium-confetti-burst 1.9s ease-out var(--delay) both;
+}
+
+.podium-confetti span:nth-child(4n + 2) {
+  background: var(--c1);
+}
+
+.podium-confetti span:nth-child(4n + 3) {
+  background: var(--c2);
+}
+
+.podium-confetti span:nth-child(4n) {
+  background: var(--c3);
+}
+
+.podium-confetti span:nth-child(3n) {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+@keyframes podium-confetti-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(0.3) rotate(0deg);
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  42% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--burst-x)), var(--burst-y)) rotate(var(--spin));
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--fall-x)), var(--fall-y)) rotate(var(--spin));
+  }
 }
 
 .podium-place {
@@ -1378,10 +1500,61 @@ input {
 }
 
 .podium-character {
+  position: relative;
   display: flex;
   min-height: 90px;
   align-items: flex-end;
   justify-content: center;
+}
+
+/* Keep the rotating rays behind the winner's actual CharacterCanvas. */
+.podium-place-1 .podium-character::before {
+  content: '';
+  position: absolute;
+  bottom: -38px;
+  left: 50%;
+  width: 160px;
+  height: 160px;
+  margin-left: -80px;
+  border-radius: 50%;
+  opacity: 0.7;
+  background: repeating-conic-gradient(
+    from 0deg,
+    color-mix(in srgb, var(--accent) 65%, transparent) 0deg 12deg,
+    transparent 12deg 27deg
+  );
+  pointer-events: none;
+  animation: podium-shine 16s linear infinite;
+}
+
+.podium-figure {
+  position: relative;
+  z-index: 1;
+}
+
+.podium-figure-winner {
+  animation: podium-winner-hop 0.85s ease-out 0.55s both;
+}
+
+@keyframes podium-shine {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes podium-winner-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  40% {
+    transform: translateY(-18px);
+  }
+
+  70% {
+    transform: translateY(3px);
+  }
 }
 
 .podium-step {
@@ -1457,8 +1630,14 @@ input {
   }
 
   .results-screen,
-  .podium-place {
+  .podium-place,
+  .podium-figure-winner,
+  .podium-place-1 .podium-character::before {
     animation: none;
+  }
+
+  .podium-confetti span {
+    display: none;
   }
 }
 </style>
