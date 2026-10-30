@@ -43,3 +43,19 @@ export function connectLobby(code: string, playerId: string, name: string, look:
   channel.bind('realtime:subscription_error', (e: unknown) => onStatus(`error: ${JSON.stringify(e)}`))
   return { close: () => connection.disconnect() }
 }
+
+export type LobbyDifficulty = 'all' | 'easy' | 'medium' | 'hard'
+export type LobbyRounds = 3 | 5 | 10 | 15
+export interface MatchSettings { rounds: LobbyRounds; difficulty: LobbyDifficulty }
+export interface RaceResult { ticks: number; deaths: number; replay: string }
+export interface MatchRound { number: number; levelKey: string; startAt: number; playerIds: string[]; results: Record<string, RaceResult> }
+export interface MatchState { settings: MatchSettings; readyIds: string[]; started: boolean; revision: number; round: MatchRound | null }
+export async function matchRequest(code: string, playerId: string, action: 'get' | 'ready' | 'settings' | 'start' | 'finish', options?: { ready?: boolean; settings?: MatchSettings; replay?: string }): Promise<MatchState> {
+  const response = await fetch('/.netlify/functions/multiplayer-match', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code, playerId, action, ...options }),
+  })
+  const data = await response.json() as MatchState & { error?: string }
+  if (!response.ok) throw new Error(data.error || 'Match request failed')
+  return data
+}

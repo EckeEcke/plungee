@@ -62,6 +62,8 @@ export class Game {
   private levelKey = ''
   private status: GameStatus = 'ready'
   private countdownMs = 0
+  private scheduledStartAt: number | null = null
+  private restartEnabled = true
   private inputs: Int8Array = new Int8Array(MAX_REPLAY_TICKS)
   private inputCount = 0
   private acc = 0
@@ -94,7 +96,7 @@ export class Game {
     // Große Quetscher klingen lauter; nur im Bild (die Prüfung macht der Renderer)
     this.renderer.onCrusherImpact = (size) => playSfx('crusher', 0.55 + 0.15 * size)
     this.input = new InputController(container)
-    this.input.onRestart = () => this.restart()
+    this.input.onRestart = () => { if (this.restartEnabled) this.restart() }
 
     this.resizeObs = new ResizeObserver(() => this.resize())
     this.resizeObs.observe(container)
@@ -113,6 +115,16 @@ export class Game {
       this.lastTs = performance.now()
       this.raf = requestAnimationFrame(this.frame)
     }
+  }
+
+  /** Gemeinsamer Rennstart anhand des Server-Zeitpunkts (Unix-Millisekunden). */
+  setStartAt(startAt: number | null): void {
+    this.scheduledStartAt = startAt
+    // Wird vor load() gesetzt; restart() berechnet dann den initialen Countdown.
+  }
+
+  setRestartEnabled(enabled: boolean): void {
+    this.restartEnabled = enabled
   }
 
   setTheme(theme: Theme): void {
@@ -201,7 +213,7 @@ export class Game {
     this.acc = 0
     this.status = 'ready'
     this.focusedRunner = 0
-    this.countdownMs = COUNTDOWN_STEP_MS * 3
+    this.countdownMs = this.scheduledStartAt === null ? COUNTDOWN_STEP_MS * 3 : Math.max(0, this.scheduledStartAt - Date.now())
     this.newBest = false
     this.replay = ''
     this.emitHud()
@@ -239,7 +251,7 @@ export class Game {
     this.lastTs = ts
 
     if (this.status === 'ready') {
-      this.countdownMs -= dtMs
+      this.countdownMs = this.scheduledStartAt === null ? this.countdownMs - dtMs : Math.max(0, this.scheduledStartAt - Date.now())
       if (this.countdownMs <= 0) {
         this.status = 'running'
         this.acc = 0
@@ -248,7 +260,7 @@ export class Game {
         const cd = Math.ceil(this.countdownMs / COUNTDOWN_STEP_MS)
         if (cd !== this.lastCountdown) {
           this.lastCountdown = cd
-          playSfx('countdown')
+          if (cd <= 3) playSfx('countdown')
         }
       }
       this.emitHud()
@@ -284,7 +296,7 @@ export class Game {
     }
     this.replay = encodeInputs(this.inputs.subarray(0, this.inputCount))
     const t = this.world.finishTick
-    if (this.bestTicks === null || t < this.bestTicks) {
+    if (!this.levelKey.startsWith('multiplayer:') && (this.bestTicks === null || t < this.bestTicks)) {
       // „New best“ zeigt in Online-Leveln und der Weekly der Server (Bestzeit des Levels), nur sonst die eigene Bestzeit
       this.newBest = !this.rankedLevel()
       this.bestTicks = t
@@ -347,7 +359,7 @@ export class Game {
       ticks: this.world.finished ? this.world.finishTick : this.world.tick,
       deaths: this.world.deaths,
       progress: this.status === 'finished' ? 1 : progress,
-      countdown: this.status === 'ready' ? Math.max(1, Math.ceil(this.countdownMs / COUNTDOWN_STEP_MS)) : 0,
+      countdown: this.status === 'ready' ? Math.min(3, Math.max(1, Math.ceil(this.countdownMs / COUNTDOWN_STEP_MS))) : 0,
       bestTicks: this.bestTicks,
       newBest: this.newBest,
       replay: this.replay,
@@ -358,7 +370,7 @@ export class Game {
 
   /** Online-Level und Weekly: dort zählt die Bestzeit aller, nicht die eigene */
   private rankedLevel(): boolean {
-    return this.levelKey.startsWith('online:') || this.levelKey.startsWith('weekly:')
+    return this.levelKey.startsWith('online:') || this.levelKey.startsWith('weekly:') || this.levelKey.startsWith('multiplayer:')
   }
 
   private storageKey(): string {

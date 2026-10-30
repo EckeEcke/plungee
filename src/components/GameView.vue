@@ -26,8 +26,11 @@ const props = withDefaults(
     shareUrl?: string | null
     /** Zusätzliche Ghosts (Top 5 eines Community-Levels) */
     ghosts?: GhostSpec[]
+    /** Multiplayer: fester gemeinsamer Start, keine lokalen Restarts oder Bestenlisten. */
+    multiplayerStartAt?: number | null
+    multiplayerError?: string
   }>(),
-  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [] },
+  { exitIcon: '☰', exitText: 'Menu', par: null, hasNext: false, intro: null, board: null, shareUrl: null, ghosts: () => [], multiplayerStartAt: null, multiplayerError: '' },
 )
 const emit = defineEmits<{
   exit: []
@@ -53,7 +56,6 @@ const hud = shallowRef<HudState>({
   newBest: false,
   replay: '',
   race: [],
-  focusedRunner: null,
 })
 let game: Game | null = null
 
@@ -108,6 +110,8 @@ onMounted(() => {
     hud.value = h
   })
   measureInset()
+  game.setRestartEnabled(props.multiplayerStartAt === null)
+  game.setStartAt(props.multiplayerStartAt)
   game.load(compileLevel(props.levelData), props.levelKey)
   if (props.ghosts.length > 0) {
     game.setGhosts(props.ghosts)
@@ -173,7 +177,7 @@ async function share(): Promise<void> {
 onBeforeUnmount(() => clearTimeout(shareTimer))
 
 function restart(): void {
-  game?.restart()
+  if (props.multiplayerStartAt === null) game?.restart()
 }
 
 </script>
@@ -195,7 +199,7 @@ function restart(): void {
         >
           <SoundIcon :on="audioSettings.sfx || audioSettings.music" :size="18" />
         </button>
-        <button class="pill btn" type="button" aria-label="Restart" @click="restart">↻</button>
+        <button v-if="multiplayerStartAt === null" class="pill btn" type="button" aria-label="Restart" @click="restart">↻</button>
         <button class="pill btn" type="button" :aria-label="exitText" @click="emit('exit')">{{ exitIcon }}</button>
       </div>
 
@@ -216,7 +220,7 @@ function restart(): void {
       </div>
 
       <div v-if="showHint" class="hint">
-        ◀ ▶ or A / D · or hold left / right side · R = restart
+        ◀ ▶ or A / D · or hold left / right side <span v-if="multiplayerStartAt === null">· R = restart</span>
       </div>
 
       <Transition name="result">
@@ -224,21 +228,21 @@ function restart(): void {
         <div class="card">
           <div class="title">Finished!</div>
           <div class="big">{{ timeText }}</div>
-          <div v-if="medal" class="medal">
+          <div v-if="multiplayerStartAt === null && medal" class="medal">
             <MedalIcon :medal="medal" :size="34" />
             <b>{{ MEDAL_TEXT[medal] }}</b>
           </div>
-          <div v-if="targets" class="goals">
+          <div v-if="multiplayerStartAt === null && targets" class="goals">
             <span>Gold with no deaths ≤ {{ formatTicks(targets.gold) }}</span>
             <span>Silver ≤ {{ formatTicks(targets.silver) }}</span>
           </div>
           <div class="row">
             <span>Deaths</span><b>{{ hud.deaths }}</b>
           </div>
-          <div class="row" :class="{ 'row-best': showNewBest }">
+          <div v-if="multiplayerStartAt === null" class="row" :class="{ 'row-best': showNewBest }">
             <span>Best</span><b>{{ bestText }}</b>
           </div>
-          <div v-if="showNewBest || board?.firstClear" class="badges">
+          <div v-if="multiplayerStartAt === null && (showNewBest || board?.firstClear)" class="badges">
             <div v-if="showNewBest" class="badge">
               <i v-for="n in 8" :key="n" class="spark" :style="{ '--a': n * 45 + 'deg' }" aria-hidden="true" />
               <span class="badge-text">★ New best!</span>
@@ -287,14 +291,17 @@ function restart(): void {
             </template>
             </template>
           </div>
-          <div class="actions">
+          <p v-if="multiplayerStartAt !== null" class="board-note" :class="{ err: multiplayerError }">
+            {{ multiplayerError || 'Waiting for the other racers…' }}
+          </p>
+          <div v-else class="actions">
             <button class="cta" type="button" @click="restart">Retry</button>
             <button class="ghost" type="button" @click="emit('exit')">{{ exitText }}</button>
           </div>
           <button v-if="shareUrl" class="ghost share" type="button" @click="share">
             {{ shareNote || '🔗 Share this level' }}
           </button>
-          <button v-if="hasNext" class="cta next" type="button" @click="emit('next')">Next level ▶</button>
+          <button v-if="multiplayerStartAt === null && hasNext" class="cta next" type="button" @click="emit('next')">Next level ▶</button>
         </div>
       </div>
       </Transition>

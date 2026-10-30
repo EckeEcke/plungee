@@ -30,18 +30,21 @@ export default async (request: Request): Promise<Response> => {
     const hostKey = `plungee:room:${code}:host`
     const membersKey = `plungee:room:${code}:members`
     if (action === 'join') {
-      // Atomic capacity check: concurrent joins cannot exceed eight members.
+      // Atomic capacity and pre-start checks: joins cannot race with a match start.
       const result = await redis.eval(`
         local host = redis.call('GET', KEYS[1])
         if not host then return 0 end
         if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 then return 2 end
+        local state = redis.call('GET', KEYS[3])
+        if state and cjson.decode(state).started then return 3 end
         if redis.call('SCARD', KEYS[2]) >= 8 then return 1 end
         redis.call('SADD', KEYS[2], ARGV[1])
         redis.call('EXPIRE', KEYS[2], 7200)
         return 2
-      `, [hostKey, membersKey], [playerId])
+      `, [hostKey, membersKey, `plungee:room:${code}:match`], [playerId])
       if (Number(result) === 0) return json({ error: 'Room not found or expired' }, 404)
       if (Number(result) === 1) return json({ error: 'Room is full (8 players)' }, 409)
+      if (Number(result) === 3) return json({ error: 'Match already started' }, 409)
       return json({ code, hostId: await redis.get(hostKey) })
     }
     if (action === 'leave') {
