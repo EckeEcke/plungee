@@ -24,7 +24,11 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 const hudBar = ref<HTMLElement | null>(null)
 const failed = ref(false)
 const showReplayIntro = ref(false)
+const showFinishIntro = ref(false)
+const leavingReplay = ref(false)
 let replayIntroTimer: ReturnType<typeof setTimeout> | undefined
+let finishHoldTimer: ReturnType<typeof setTimeout> | undefined
+let finishExitTimer: ReturnType<typeof setTimeout> | undefined
 const hud = shallowRef<HudState>({
   status: 'ready',
   ticks: 0,
@@ -130,6 +134,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearTimeout(replayIntroTimer)
+  clearTimeout(finishHoldTimer)
+  clearTimeout(finishExitTimer)
   insetObs?.disconnect()
   stopMusic()
   game?.dispose()
@@ -137,14 +143,19 @@ onBeforeUnmount(() => {
 })
 
 const finished = computed(() => hud.value.status === 'finished')
-// In multiplayer the results already show every player's time: no replay result screen.
+// Keep the last frame visible for FINISH!, then fade into the existing results view.
 watch(finished, (done: boolean) => {
-  if (done && props.multiplayer) emit('exit')
+  if (!done || !props.multiplayer) return
+  showFinishIntro.value = true
+  finishHoldTimer = setTimeout(() => {
+    leavingReplay.value = true
+  }, 950)
+  finishExitTimer = setTimeout(() => emit('exit'), 1250)
 })
 </script>
 
 <template>
-  <div class="stage" :style="cssVars">
+  <div class="stage" :class="{ 'leaving-replay': leavingReplay }" :style="cssVars">
     <div ref="column" class="column">
       <canvas ref="canvas" class="canvas" />
 
@@ -176,6 +187,12 @@ watch(finished, (done: boolean) => {
       <Transition name="replay-pop">
         <div v-if="multiplayer && showReplayIntro && hud.status === 'ready' && !failed" class="replay-intro" aria-live="polite">
           <span>REPLAY!</span>
+        </div>
+      </Transition>
+
+      <Transition name="replay-pop">
+        <div v-if="multiplayer && showFinishIntro && !failed" class="replay-intro" aria-live="polite">
+          <span>FINISH!</span>
         </div>
       </Transition>
 
@@ -218,6 +235,10 @@ watch(finished, (done: boolean) => {
   justify-content: center;
   background: var(--surround);
   touch-action: none;
+  transition: opacity 0.3s ease;
+}
+.stage.leaving-replay {
+  opacity: 0;
 }
 .column {
   position: relative;
@@ -402,6 +423,7 @@ watch(finished, (done: boolean) => {
 @media (prefers-reduced-motion: reduce) {
   .replay-intro span { animation: none; }
   .replay-pop-leave-active { transition: none; }
+  .stage { transition: none; }
 }
 .result {
   position: absolute;
