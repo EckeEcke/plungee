@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import PageShell from './PageShell.vue'
@@ -533,7 +532,6 @@ onBeforeUnmount(() => {
   session?.close()
 })
 </script>
-
 <template>
   <PageShell :theme="theme">
     <div v-if="showGameOverIntro" class="game-over-screen" aria-live="polite">
@@ -680,7 +678,7 @@ onBeforeUnmount(() => {
                   stroke-width="10"
                 />
                 <path
-                  d="M340 158 q12 -19 24 0 t24 0 t24 0"
+                  d="M340 158 q12 -19 24 0 t24 0 t24 0 t24 0"
                   fill="none"
                   stroke="color-mix(in srgb, var(--c1) 60%, var(--bg1))"
                   stroke-width="10"
@@ -722,6 +720,7 @@ onBeforeUnmount(() => {
                 <span v-if="player.host" class="runner-host">HOST</span><span class="runner-name">{{ player.name }}</span><span v-if="!player.host && match.readyIds.includes(player.id)" class="runner-ready">READY ✓</span>
                 <div class="runner-bob" :style="{ animationDelay: `${player.index * -0.33}s` }"><CharacterCanvas :colors="colorsFor(player)" :look="player.safeLook" :size="60" /></div>
               </div>
+
             </div>
           </section>
 
@@ -980,7 +979,6 @@ input {
   color: var(--accent);
   overflow-wrap: anywhere;
 }
-
 .error {
   margin: 0;
   color: var(--accent);
@@ -1127,7 +1125,6 @@ input {
     animation: none;
   }
 }
-
 .runner-host {
   font-size: 9px;
   font-weight: 900;
@@ -1277,7 +1274,7 @@ input {
 }
 
 .results-list li.self {
-  background: var(--accent);
+  background: var(--highlight);
   color: var(--outline);
 }
 

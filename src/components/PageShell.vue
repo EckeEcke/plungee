@@ -13,6 +13,7 @@ const cssVars = computed(() => ({
   '--panel': props.theme.ui.panel,
   '--text': props.theme.ui.text,
   '--accent': props.theme.ui.accent,
+  '--highlight': props.theme.ui.highlight,
   '--muted': props.theme.ui.muted,
   '--bg1': props.theme.bgTop,
   '--bg2': props.theme.bgBottom,

@@ -62,12 +62,10 @@ function cueFinalRoundIntro(): void {
 
   showFinalRoundIntro.value = true
   playSfx('hammer')
-
   finalRoundIntroTimer = setTimeout(() => {
     showFinalRoundIntro.value = false
   }, introMs)
 }
-
 const hud = shallowRef<HudState>({
   status: 'ready',
   ticks: 0,
@@ -86,6 +84,7 @@ const cssVars = computed(() => ({
   '--panel': props.theme.ui.panel,
   '--text': props.theme.ui.text,
   '--accent': props.theme.ui.accent,
+  '--highlight': props.theme.ui.highlight,
   '--muted': props.theme.ui.muted,
   '--player': props.theme.player,
   '--bg1': props.theme.bgTop,
@@ -863,7 +862,7 @@ function restart(): void {
 }
 
 .board-list li.you {
-  background: var(--accent);
+  background: var(--highlight);
   color: var(--outline);
 }
 

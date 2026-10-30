@@ -50,6 +50,7 @@ const cssVars = computed(() => ({
   '--panel': props.theme.ui.panel,
   '--text': props.theme.ui.text,
   '--accent': props.theme.ui.accent,
+  '--highlight': props.theme.ui.highlight,
   '--muted': props.theme.ui.muted,
   '--bg1': props.theme.bgTop,
   '--bg2': props.theme.bgBottom,
@@ -358,7 +359,7 @@ watch(finished, (done: boolean) => {
   border-radius: 6px;
 }
 .runner:disabled { cursor: default; }
-.focused .runner { background: var(--line); }
+.focused .runner { background: color-mix(in srgb, var(--highlight) 22%, transparent); }
 .runner:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bar i {
   display: block;
@@ -383,7 +384,7 @@ watch(finished, (done: boolean) => {
   color: var(--muted);
 }
 .you .nm {
-  color: var(--accent);
+  color: var(--highlight);
 }
 .countdown {
   position: absolute;
