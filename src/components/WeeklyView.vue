@@ -1,26 +1,43 @@
+
 <script setup lang="ts">
 import PageShell from './PageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Theme } from '../game/theme'
 import { formatTicks } from '../sim'
-import { fetchWeekly, fetchWeeklyBoard, fetchWeeklyRace, loadName, nameProblem, saveName, type WeeklyBoard, type WeeklyInfo, type WeeklyRace } from '../online/api'
+import {
+  fetchWeekly,
+  fetchWeeklyBoard,
+  fetchWeeklyRace,
+  type WeeklyBoard,
+  type WeeklyInfo,
+  type WeeklyRace,
+} from '../online/api'
 
 const props = defineProps<{ theme: Theme }>()
-const emit = defineEmits<{ exit: []; play: [info: WeeklyInfo]; race: [race: WeeklyRace] }>()
+const emit = defineEmits<{
+  exit: []
+  play: [info: WeeklyInfo]
+  race: [race: WeeklyRace]
+}>()
+
 const raceBusy = ref(false)
 const raceError = ref('')
 
 /** Das Rennen der Top 5 der Vorwoche laden und öffnen */
 async function watchRace(): Promise<void> {
   if (raceBusy.value) return
+
   raceBusy.value = true
   raceError.value = ''
+
   try {
     const r = await fetchWeeklyRace()
+
     if (r) emit('race', r)
     else raceError.value = 'No replays to show for last week.'
   } catch (e) {
-    raceError.value = e instanceof Error ? e.message : 'Could not load the race'
+    raceError.value =
+      e instanceof Error ? e.message : 'Could not load the race'
   } finally {
     raceBusy.value = false
   }
@@ -30,20 +47,25 @@ const info = ref<WeeklyInfo | null>(null)
 const board = ref<WeeklyBoard | null>(null)
 const loading = ref(true)
 const error = ref('')
-const name = ref(loadName())
-const nameBad = computed(() => nameProblem(name.value))
 const nowMs = ref(Date.now())
+
 let timer: ReturnType<typeof setInterval> | undefined
 
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
+
   try {
-    const [i, b] = await Promise.all([fetchWeekly(), fetchWeeklyBoard()])
+    const [i, b] = await Promise.all([
+      fetchWeekly(),
+      fetchWeeklyBoard(),
+    ])
+
     info.value = i
     board.value = b
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Could not load the challenge'
+    error.value =
+      e instanceof Error ? e.message : 'Could not load the challenge'
   } finally {
     loading.value = false
   }
@@ -53,103 +75,193 @@ onMounted(() => {
   void load()
   timer = setInterval(() => (nowMs.value = Date.now()), 30_000)
 })
+
 onBeforeUnmount(() => clearInterval(timer))
 
 const left = computed(() => {
   if (!info.value) return ''
-  const min = Math.max(0, Math.floor((info.value.endsAt - nowMs.value) / 60_000))
+
+  const min = Math.max(
+    0,
+    Math.floor((info.value.endsAt - nowMs.value) / 60_000),
+  )
+
   const d = Math.floor(min / 1440)
   const h = Math.floor((min % 1440) / 60)
-  if (d > 0) return `${d} d ${h} h left`
-  return h > 0 ? `${h} h ${min % 60} min left` : `${min} min left`
-})
 
-function onName(e: Event): void {
-  name.value = (e.target as HTMLInputElement).value.slice(0, 16)
-  saveName(name.value)
-}
+  if (d > 0) return `${d} d ${h} h left`
+
+  return h > 0
+    ? `${h} h ${min % 60} min left`
+    : `${min} min left`
+})
 </script>
 
 <template>
   <PageShell :theme="theme">
-  <div class="weekly">
-    <header class="top">
-      <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
-      <div class="title">
-        <b>Weekly challenge</b>
-        <small>One level, one week, best time wins</small>
-      </div>
-    </header>
+    <div class="weekly">
+      <header class="top">
+        <button
+          class="ib"
+          type="button"
+          aria-label="Back to menu"
+          @click="emit('exit')"
+        >
+          ←
+        </button>
 
-    <div class="scroll">
-      <div class="col">
-        <p v-if="loading" class="note">Loading …</p>
-        <div v-else-if="error" class="note err">
-          <p>{{ error }}</p>
-          <button class="cta" type="button" @click="load">Try again</button>
+        <div class="title">
+          <b>Weekly challenge</b>
+          <small>One level, one week, best time wins</small>
         </div>
+      </header>
 
-        <template v-else-if="info && board">
-          <section class="hero">
-            <small>This week</small>
-            <b class="lv">{{ info.title }}</b>
-            <span class="left">{{ left }}</span>
-            <button class="cta" type="button" @click="emit('play', info)">▶ Play</button>
-          </section>
+      <div class="scroll">
+        <div class="col">
+          <p v-if="loading" class="note">
+            Loading …
+          </p>
 
-          <label class="name">
-            <span>Playing as</span>
-            <input type="text" maxlength="16" placeholder="Anonymous" :value="name" :aria-invalid="nameBad ? 'true' : undefined" @input="onName" />
-          </label>
-          <p v-if="nameBad" class="bad">{{ nameBad }}</p>
+          <div v-else-if="error" class="note err">
+            <p>{{ error }}</p>
 
-          <section class="card">
-            <div class="head">
-              <b>Best times</b>
-              <span v-if="board.rank">Your rank {{ board.rank }} / {{ board.total }}</span>
-              <span v-else-if="board.total">{{ board.total }} {{ board.total === 1 ? 'player' : 'players' }}</span>
-            </div>
-            <ol v-if="board.top.length" class="rows">
-              <li v-for="r in board.top" :key="r.rank" :class="{ you: r.you }">
-                <span class="n">{{ r.rank }}</span>
-                <span class="who">{{ r.name }}</span>
-                <span class="t">{{ formatTicks(r.ticks) }}</span>
-              </li>
-            </ol>
-            <p v-else class="empty">Nobody has finished yet. Be the first!</p>
-          </section>
-
-          <section v-if="board.lastWeek" class="card">
-            <div class="head">
-              <b>Last week<template v-if="board.lastWeek.title"> · {{ board.lastWeek.title }}</template></b>
-            </div>
-            <ol class="rows">
-              <li v-for="r in board.lastWeek.top" :key="r.rank" :class="{ you: r.you }">
-                <span class="n">{{ r.rank === 1 ? '🏆' : r.rank }}</span>
-                <span class="who">{{ r.name }}</span>
-                <span class="t">{{ formatTicks(r.ticks) }}</span>
-              </li>
-            </ol>
-            <button class="race" type="button" :disabled="raceBusy" @click="watchRace">
-              {{ raceBusy ? 'Loading …' : '▶ Watch the top 5 race' }}
+            <button
+              class="cta"
+              type="button"
+              @click="load"
+            >
+              Try again
             </button>
-            <p v-if="raceError" class="race-err">{{ raceError }}</p>
-          </section>
+          </div>
 
-        </template>
+          <template v-else-if="info && board">
+            <section class="hero">
+              <small>This week</small>
+
+              <b class="lv">{{ info.title }}</b>
+
+              <span class="left">{{ left }}</span>
+
+              <button
+                class="cta"
+                type="button"
+                @click="emit('play', info)"
+              >
+                ▶ Play
+              </button>
+            </section>
+
+            <section class="card">
+              <div class="head">
+                <b>Best times</b>
+
+                <span v-if="board.rank">
+                  Your rank {{ board.rank }} / {{ board.total }}
+                </span>
+
+                <span v-else-if="board.total">
+                  {{ board.total }}
+                  {{ board.total === 1 ? 'player' : 'players' }}
+                </span>
+              </div>
+
+              <ol v-if="board.top.length" class="rows">
+                <li
+                  v-for="r in board.top"
+                  :key="r.rank"
+                  :class="{ you: r.you }"
+                >
+                  <span class="n">{{ r.rank }}</span>
+                  <span class="who">{{ r.name }}</span>
+                  <span class="t">{{ formatTicks(r.ticks) }}</span>
+                </li>
+              </ol>
+
+              <p v-else class="empty">
+                Nobody has finished yet. Be the first!
+              </p>
+            </section>
+
+            <section
+              v-if="board.lastWeek"
+              class="card"
+            >
+              <div class="head">
+                <b>
+                  Last week
+                  <template v-if="board.lastWeek.title">
+                    · {{ board.lastWeek.title }}
+                  </template>
+                </b>
+              </div>
+
+              <ol class="rows">
+                <li
+                  v-for="r in board.lastWeek.top"
+                  :key="r.rank"
+                  :class="{ you: r.you }"
+                >
+                  <span class="n">
+                    {{ r.rank === 1 ? '🏆' : r.rank }}
+                  </span>
+
+                  <span class="who">{{ r.name }}</span>
+
+                  <span class="t">
+                    {{ formatTicks(r.ticks) }}
+                  </span>
+                </li>
+              </ol>
+
+              <button
+                class="race"
+                type="button"
+                :disabled="raceBusy"
+                @click="watchRace"
+              >
+                {{
+                  raceBusy
+                    ? 'Loading …'
+                    : '▶ Watch the top 5 race'
+                }}
+              </button>
+
+              <p v-if="raceError" class="race-err">
+                {{ raceError }}
+              </p>
+            </section>
+          </template>
+        </div>
       </div>
     </div>
-  </div>
   </PageShell>
 </template>
 
 <style scoped>
+/* Layout */
+
 .weekly {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 12px max(24px, env(safe-area-inset-bottom));
+}
+
+.col {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+/* Header */
 
 .top {
   display: flex;
@@ -185,19 +297,7 @@ function onName(e: Event): void {
   color: var(--muted);
 }
 
-.scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 14px 12px max(24px, env(safe-area-inset-bottom));
-}
-
-.col {
-  width: min(100%, 520px);
-  margin: 0 auto;
-  display: grid;
-  gap: 14px;
-}
+/* Loading and errors */
 
 .note {
   text-align: center;
@@ -208,6 +308,8 @@ function onName(e: Event): void {
 .note.err {
   color: var(--accent);
 }
+
+/* Cards */
 
 .hero,
 .card {
@@ -246,6 +348,8 @@ function onName(e: Event): void {
   margin-bottom: 8px;
 }
 
+/* Main play button */
+
 .cta {
   cursor: pointer;
   font: inherit;
@@ -263,6 +367,8 @@ function onName(e: Event): void {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--outline);
 }
+
+/* Leaderboard */
 
 .head {
   display: flex;
@@ -313,6 +419,14 @@ function onName(e: Event): void {
   font-variant-numeric: tabular-nums;
 }
 
+.empty {
+  margin: 8px 0 0;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* Last week's replay */
+
 .race {
   display: block;
   margin: 12px auto 2px;
@@ -339,41 +453,5 @@ function onName(e: Event): void {
   font-size: 13px;
   font-weight: 700;
   color: var(--accent);
-}
-
-.empty {
-  margin: 8px 0 0;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.name {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--muted);
-}
-
-.bad {
-  margin: -8px 0 0;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--accent);
-}
-
-.name input {
-  width: 130px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 5px 8px;
-  color: var(--text);
-  background: var(--panel);
-  border: 2px solid var(--line);
-  border-radius: 10px;
 }
 </style>

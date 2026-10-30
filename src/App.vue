@@ -394,7 +394,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
       <div class="buttons">
         <button class="play" type="button" @click="screen = 'campaign'">Campaign</button>
         <button class="build" type="button" @click="screen = 'weekly'">Weekly challenge</button>
-        <button class="build" type="button" @click="screen = 'multiplayer'">Multiplayer</button>
+        <button class="build" type="button" @click="screen = 'multiplayer'">Online Multiplayer</button>
         <button class="build" type="button" @click="screen = 'online'">Community levels</button>
         <button class="build" type="button" @click="screen = 'edit'">Build a level</button>
       </div>
