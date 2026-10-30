@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import PageShell from './PageShell.vue'
@@ -532,6 +533,7 @@ onBeforeUnmount(() => {
   session?.close()
 })
 </script>
+
 <template>
   <PageShell :theme="theme">
     <div v-if="showGameOverIntro" class="game-over-screen" aria-live="polite">
@@ -678,7 +680,7 @@ onBeforeUnmount(() => {
                   stroke-width="10"
                 />
                 <path
-                  d="M340 158 q12 -19 24 0 t24 0 t24 0 t24 0"
+                  d="M340 158 q12 -19 24 0 t24 0 t24 0"
                   fill="none"
                   stroke="color-mix(in srgb, var(--c1) 60%, var(--bg1))"
                   stroke-width="10"
@@ -720,7 +722,6 @@ onBeforeUnmount(() => {
                 <span v-if="player.host" class="runner-host">HOST</span><span class="runner-name">{{ player.name }}</span><span v-if="!player.host && match.readyIds.includes(player.id)" class="runner-ready">READY ✓</span>
                 <div class="runner-bob" :style="{ animationDelay: `${player.index * -0.33}s` }"><CharacterCanvas :colors="colorsFor(player)" :look="player.safeLook" :size="60" /></div>
               </div>
-
             </div>
           </section>
 
@@ -731,16 +732,18 @@ onBeforeUnmount(() => {
           </section>
 
           <template v-if="!room">
-            <section class="panel character-panel">
+            <button
+              class="panel character-panel"
+              type="button"
+              aria-label="Edit character and player name"
+              @click="emit('editCharacter')"
+            >
               <CharacterCanvas :colors="myColors" :look="look" :size="72" />
               <div class="character-details">
                 <strong>{{ name.trim() || 'Guest' }}</strong>
-                <button class="edit-character" type="button" @click="emit('editCharacter')">Edit character</button>
+                <span class="edit-character">Edit character</span>
               </div>
-            </section>
-            <section class="panel name-panel">
-              <label class="field"><span>YOUR NAME</span><input v-model="name" maxlength="16" placeholder="Player name" /></label>
-            </section>
+            </button>
             <section v-if="!hasInvite" class="panel">
               <div class="section-head"><div><b>CREATE A ROOM</b><small>Invite your friends to race</small></div></div>
               <button class="cta" type="button" :disabled="busy" @click="void enter('create')">＋ Create lobby</button>
@@ -966,6 +969,7 @@ input {
 
 .join-row input {
   flex: 1;
+  align-self: stretch;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
@@ -976,6 +980,7 @@ input {
   color: var(--accent);
   overflow-wrap: anywhere;
 }
+
 .error {
   margin: 0;
   color: var(--accent);
@@ -1122,6 +1127,7 @@ input {
     animation: none;
   }
 }
+
 .runner-host {
   font-size: 9px;
   font-weight: 900;
@@ -1135,6 +1141,15 @@ input {
   display: flex;
   align-items: center;
   gap: 14px;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.character-panel:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .character-details {
