@@ -36,7 +36,6 @@ import { themeById } from './game/theme'
 import { DIFFICULTIES, LEVELS_BY_DIFFICULTY, type Difficulty } from './levels'
 
 const inviteRoomCode = new URLSearchParams(window.location.search).get('room')
-
 const screen = ref<'menu' | 'campaign' | 'play' | 'edit' | 'online' | 'onlinePlay' | 'weekly' | 'weeklyPlay' | 'character' | 'admin' | 'privacy' | 'race' | 'multiplayer'>('menu')
 
 /** Gespeicherte Wahl zuerst, sonst die Systemeinstellung (im Webview der Reddit-App erbt sie das Gerät) */
@@ -327,18 +326,8 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     @name="onNameChosen"
   />
 
-  <MultiplayerView
-    v-else-if="screen === 'multiplayer'"
-    :theme="baseTheme"
-    @exit="screen = 'menu'"
-    @edit-character="screen = 'character'"
-  />
-
-  <CharacterView
-    v-else-if="screen === 'character'"
-    :theme="baseTheme"
-    @exit="screen = inviteRoomCode ? 'multiplayer' : 'menu'"
-  />
+  <MultiplayerView v-else-if="screen === 'multiplayer'" :theme="baseTheme" @exit="screen = 'menu'" @edit-character="screen = 'character'" />
+  <CharacterView v-else-if="screen === 'character'" :theme="baseTheme" @exit="screen = inviteRoomCode ? 'multiplayer' : 'menu'" />
 
   <RaceView
     v-else-if="screen === 'race' && weeklyRace"
@@ -391,7 +380,15 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
     <div class="content">
       <div class="logo">
         <!-- Dieselbe Zeichnung wie im Spiel, mit dem gewählten Aussehen -->
-        <CharacterCanvas class="face" :colors="theme" :look="look" :size="104" />
+        <button
+          class="character-link"
+          type="button"
+          aria-label="Edit character"
+          @click="screen = 'character'"
+        >
+          <CharacterCanvas class="face" :colors="theme" :look="look" :size="104" />
+          <span class="edit-hint" aria-hidden="true">Click to edit</span>
+        </button>
         <h1>PLUNGEE</h1>
         <p>Fall fast. Land smart.</p>
       </div>
@@ -399,10 +396,9 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
       <div class="buttons">
         <button class="play" type="button" @click="screen = 'campaign'">Campaign</button>
         <button class="build" type="button" @click="screen = 'weekly'">Weekly challenge</button>
+        <button class="build" type="button" @click="screen = 'multiplayer'">Multiplayer</button>
         <button class="build" type="button" @click="screen = 'online'">Community levels</button>
         <button class="build" type="button" @click="screen = 'edit'">Build a level</button>
-        <button class="build" type="button" @click="screen = 'character'">Character</button>
-        <button class="build" type="button" @click="screen = 'multiplayer'">Multiplayer</button>
       </div>
 
       <div class="snd-row">
@@ -537,6 +533,69 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
 
 .logo {
   text-align: center;
+}
+
+.character-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.character-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 5px;
+  border-radius: 12px;
+}
+
+.edit-hint {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  left: calc(100% - 8px);
+  padding: 4px 7px;
+  border: 2px solid var(--outline);
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--outline);
+  box-shadow: 2px 2px 0 var(--outline);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  animation: edit-hint-flash 3s linear infinite;
+}
+
+@keyframes edit-hint-flash {
+  0%,
+  18% {
+    opacity: 1;
+  }
+
+  25%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.character-link:hover .edit-hint,
+.character-link:focus-visible .edit-hint {
+  opacity: 1;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edit-hint {
+    opacity: 1;
+    animation: none;
+  }
 }
 
 .face {
