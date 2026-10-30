@@ -42,6 +42,24 @@ const match = ref<MatchState>(emptyMatch())
 const namesById = ref<Record<string, string>>({})
 const looksById = ref<Record<string, Look>>({})
 const showResults = ref(false)
+const showGameOverIntro = ref(false)
+let gameOverTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearGameOverIntro(): void {
+  if (gameOverTimer !== null) clearTimeout(gameOverTimer)
+  gameOverTimer = null
+  showGameOverIntro.value = false
+}
+
+function beginGameOverIntro(): void {
+  clearGameOverIntro()
+  showGameOverIntro.value = true
+  gameOverTimer = setTimeout(() => {
+    showGameOverIntro.value = false
+    gameOverTimer = null
+  }, 1500)
+}
+
 const pendingReplay = ref<string | null>(null)
 const raceLevel = computed(() => LEVELS.find(l => l.key === match.value.round?.levelKey))
 const allFinished = computed(() => {
@@ -149,6 +167,7 @@ function restoreState(next: MatchState): void {
       !['all', 'easy', 'medium', 'hard'].includes(next.settings.difficulty) ||
       !next.totals || !Array.isArray(next.playedLevels) || typeof next.completed !== 'boolean') return
   // Retain previously delivered individual replay events only within the same round.
+  const wasCompleted = match.value.completed
   const prior = match.value.round
   if (next.round?.number !== prior?.number) {
     showResults.value = false
@@ -165,6 +184,12 @@ function restoreState(next: MatchState): void {
     }
   }
   match.value = next
+  if (next.completed && !wasCompleted) {
+    showResults.value = true
+    beginGameOverIntro()
+  } else if (!next.completed && wasCompleted) {
+    clearGameOverIntro()
+  }
   if (next.round?.replaySkipped) showResults.value = true
   if (next.started && next.round && !next.round.playerIds.includes(playerId)) {
     resetLobby('Match already started')
@@ -241,6 +266,7 @@ function onMessage(message: LobbyEvent): void {
 }
 
 function resetLobby(reason: string): void {
+  clearGameOverIntro()
   session?.close()
   session = null
   room.value = ''
@@ -315,6 +341,7 @@ async function enter(action: 'create' | 'join'): Promise<void> {
   } finally { busy.value = false }
 }
 async function leave(): Promise<void> {
+  clearGameOverIntro()
   session?.close()
   session = null
   room.value = ''
@@ -398,11 +425,13 @@ function finishMatch(): void {
     completed: true,
   }
   showResults.value = true
+  beginGameOverIntro()
   commit()
 }
 /** Reset the match for everyone while keeping the same Apinator lobby. */
 function playAgain(): void {
   if (!isHost.value || !match.value.completed) return
+  clearGameOverIntro()
 
   const settings = { ...match.value.settings }
   const revision = match.value.revision
@@ -442,12 +471,18 @@ function onRaceFinished(result: { replay: string }): void {
   else sendFinish(result.replay)
 }
 
-onBeforeUnmount(() => { session?.close() })
+onBeforeUnmount(() => {
+  clearGameOverIntro()
+  session?.close()
+})
 </script>
 <template>
   <PageShell :theme="theme">
+    <div v-if="showGameOverIntro" class="game-over-screen" aria-live="polite">
+      <span>GAME OVER!</span>
+    </div>
     <RaceView
-      v-if="match.started && match.round && allFinished && replayRace && !showResults"
+      v-else-if="match.started && match.round && allFinished && replayRace && !showResults"
       :key="'multiplayer-replay-' + room + '-' + match.round.number"
       :theme="theme"
       :race="replayRace"
@@ -678,10 +713,10 @@ onBeforeUnmount(() => { session?.close() })
   gap: 14px;
 }
 
-.panel,.lobby-stage {
+.panel,
+.lobby-stage {
   background: var(--panel);
   border: 3px solid var(--line);
-  border-radius: 20px;
   box-shadow: 4px 4px 0 var(--outline);
   overflow: hidden;
 }
@@ -690,6 +725,11 @@ onBeforeUnmount(() => { session?.close() })
   padding: 16px;
   display: grid;
   gap: 13px;
+  border-radius: 20px;
+}
+
+.lobby-stage {
+  border-radius: 0;
 }
 
 .section-head {
@@ -1236,6 +1276,46 @@ input {
   font-size: 12px;
 }
 
+/* Match-end intro: same arcade card and bounce as FINISH! in RaceView. */
+.game-over-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.game-over-screen span {
+  padding: 12px 22px;
+  border: 4px solid var(--outline);
+  border-radius: 16px;
+  background: var(--accent);
+  color: var(--outline);
+  box-shadow: 7px 7px 0 var(--outline);
+  font-size: clamp(44px, 12vw, 76px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  animation: game-over-bounce 0.55s cubic-bezier(.22, 1.5, .44, 1) both;
+}
+
+@keyframes game-over-bounce {
+  0% {
+    opacity: 0;
+    transform: scale(0.35) rotate(-12deg);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.12) rotate(3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-3deg);
+  }
+}
+
 /* Results transition and final podium */
 
 .results-screen {
@@ -1372,6 +1452,10 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .game-over-screen span {
+    animation: none;
+  }
+
   .results-screen,
   .podium-place {
     animation: none;
