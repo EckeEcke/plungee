@@ -12,6 +12,8 @@ export interface MatchRound {
   startAt: number
   /** Host-coordinated replay countdown; null if there is no completed run. */
   replayAt: number | null
+  /** Host may skip the replay for everybody in this round. */
+  replaySkipped?: boolean
   playerIds: string[]
   results: Record<string, RaceResult>
 }

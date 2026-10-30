@@ -14,10 +14,12 @@ const props = withDefaults(defineProps<{
   race: WeeklyRace
   /** Multiplayer uses the same replay engine with the actual player looks. */
   multiplayer?: boolean
+  /** Only the multiplayer host can skip playback for every player. */
+  canSkip?: boolean
   ghosts?: GhostSpec[]
   replayStartAt?: number | null
-}>(), { multiplayer: false, ghosts: () => [], replayStartAt: null })
-const emit = defineEmits<{ exit: [] }>()
+}>(), { multiplayer: false, canSkip: false, ghosts: () => [], replayStartAt: null })
+const emit = defineEmits<{ exit: []; skip: [] }>()
 
 const column = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -165,7 +167,22 @@ watch(finished, (done: boolean) => {
         <span v-else class="pill title">{{ multiplayer ? 'Multiplayer' : 'Last week' }} · {{ race.title }}</span>
         <span class="spacer" />
         <button v-if="!multiplayer" class="pill btn" type="button" aria-label="Watch again" @click="replay">↻</button>
-        <button class="pill btn" type="button" :aria-label="multiplayer ? 'Results' : 'Back'" @click="emit('exit')">✕</button>
+        <button
+          v-if="multiplayer && canSkip && !leavingReplay"
+          class="pill btn"
+          type="button"
+          aria-label="Skip replay for everyone"
+          @click="emit('skip')"
+        >
+          Skip
+        </button>
+        <button
+          v-if="!multiplayer || !canSkip"
+          class="pill btn"
+          type="button"
+          :aria-label="multiplayer ? 'Results' : 'Back'"
+          @click="emit('exit')"
+        >✕</button>
       </div>
 
       <ol class="standings" aria-label="Standings">
