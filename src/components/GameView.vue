@@ -11,6 +11,7 @@ import { compileLevel, formatTicks, type LevelData } from '../sim'
 import MedalIcon from './MedalIcon.vue'
 import SkullIcon from './SkullIcon.vue'
 import { loadName, nameProblem, type BoardState } from '../online/api'
+import { MULTIPLAYER_RACE_LIMIT_MS, MULTIPLAYER_GIVE_UP_AFTER_MS, MULTIPLAYER_GIVE_UP_AFTER_DEATHS } from '../multiplayer/limits'
 
 const props = withDefaults(
   defineProps<{
@@ -40,6 +41,7 @@ const emit = defineEmits<{
   exit: []
   next: []
   finished: [result: { ticks: number; deaths: number; replay: string }]
+  gaveUp: [result: { deaths: number }]
   /** Name für die Bestenliste; null = anonym senden */
   name: [name: string | null]
 }>()
@@ -51,6 +53,9 @@ const column = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 const hudBar = ref<HTMLElement | null>(null)
 const showFinalRoundIntro = ref(false)
+const gaveUp = ref(false)
+const nowMs = ref(Date.now())
+let multiplayerDeadlineInterval: ReturnType<typeof setInterval> | undefined
 let finalRoundIntroTimer: ReturnType<typeof setTimeout> | undefined
 
 function cueFinalRoundIntro(): void {
@@ -96,6 +101,22 @@ const cssVars = computed(() => ({
 }))
 
 const timeText = computed(() => formatTicks(hud.value.ticks))
+const canGiveUp = computed(() =>
+  props.multiplayerStartAt !== null &&
+  hud.value.status === 'running' &&
+  !gaveUp.value &&
+  (hud.value.deaths >= MULTIPLAYER_GIVE_UP_AFTER_DEATHS ||
+   nowMs.value - props.multiplayerStartAt >= MULTIPLAYER_GIVE_UP_AFTER_MS),
+)
+
+function giveUp(force = false): void {
+  if (props.multiplayerStartAt === null || gaveUp.value || hud.value.status !== 'running') return
+  if (!force && !canGiveUp.value) return
+  gaveUp.value = true
+  game?.dispose()
+  game = null
+  emit('gaveUp', { deaths: hud.value.deaths })
+}
 /** Eigene Bestzeit im Spiel, bei Online-Leveln und der Weekly die Bestzeit des Levels laut Server */
 const showNewBest = computed(() => hud.value.newBest || props.board?.newBest === true)
 // Fanfare erst, wenn der Server die Bestzeit oder den First clear bestätigt (lokal spielt sie das Spiel selbst);
@@ -127,6 +148,12 @@ function measureInset(): void {
 
 onMounted(() => {
   startMusic()
+  if (props.multiplayerStartAt !== null) {
+    multiplayerDeadlineInterval = setInterval(() => {
+      nowMs.value = Date.now()
+      if (nowMs.value >= props.multiplayerStartAt! + MULTIPLAYER_RACE_LIMIT_MS) giveUp(true)
+    }, 250)
+  }
   if (!column.value || !canvas.value) return
   game = new Game(canvas.value, column.value, props.theme, (h) => {
     hud.value = h
@@ -146,6 +173,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearInterval(multiplayerDeadlineInterval)
   clearTimeout(finalRoundIntroTimer)
   insetObs?.disconnect()
   insetObs = null
@@ -226,6 +254,24 @@ function restart(): void {
         </button>
         <button v-if="multiplayerStartAt === null" class="pill btn" type="button" aria-label="Restart" @click="restart">↻</button>
         <button class="pill btn" type="button" :aria-label="exitText" @click="emit('exit')">{{ exitIcon }}</button>
+      </div>
+
+      <button
+        v-if="canGiveUp"
+        class="give-up-button"
+        type="button"
+        data-noinput
+        @click="giveUp()"
+      >
+        Give up (DNF)
+      </button>
+
+      <div v-if="gaveUp" class="dnf-overlay" data-noinput>
+        <div class="card">
+          <div class="title">DNF</div>
+          <p>0 points this round</p>
+          <p class="board-note">Waiting for the other racers…</p>
+        </div>
       </div>
 
       <div class="progress" aria-hidden="true">
@@ -424,6 +470,47 @@ function restart(): void {
 
 .btn:active {
   transform: translateY(1px);
+}
+
+/* Multiplayer only. Appears after 10 deaths or 90 seconds. */
+.give-up-button {
+  position: absolute;
+  z-index: 4;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text);
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 3px 3px 0 var(--outline);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.dnf-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(10, 6, 30, 0.45);
+}
+
+.dnf-overlay .card {
+  max-width: 340px;
+}
+
+.dnf-overlay p {
+  margin: 8px 0;
+  font-weight: 800;
 }
 
 .progress {

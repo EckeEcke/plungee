@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PageShell from './PageShell.vue'
 import GameView from './GameView.vue'
 import RaceView from './RaceView.vue'
 import type { GhostSpec } from '../game/ghost'
 import { LEVELS } from '../levels'
-import { compileLevel, decodeInputs, formatTicks, simulate } from '../sim'
+import { compileLevel, decodeInputs, formatTicks, simulate, DT } from '../sim'
 import { addRoundTotals, compareTotals, roundPlacements, roundPoints } from '../multiplayer/scoring'
+import { MULTIPLAYER_RACE_LIMIT_MS } from '../multiplayer/limits'
 import CharacterCanvas from './CharacterCanvas.vue'
 import SkullIcon from './SkullIcon.vue'
 import { playSfx } from '../audio/audio'
@@ -247,16 +248,58 @@ function receiveResult(message: Extract<LobbyEvent, { kind: 'result' }>): void {
   if (message.playerId === playerId) pendingReplay.value = null
 }
 
+/** The host records a DNF exactly like a disconnected player: no replay, zero points. */
+function recordDNF(id: string, roundNumber: number, deaths: number): void {
+  if (!isHost.value) return
+  const r = match.value.round
+  if (!r || r.number !== roundNumber || !r.playerIds.includes(id) || r.results[id]) return
+  const safeDeaths = Number.isSafeInteger(deaths) && deaths >= 0 && deaths <= 100_000 ? deaths : 0
+  const result: RaceResult = { ticks: 0, deaths: safeDeaths, replay: '', finished: false }
+  const results = { ...r.results, [id]: result }
+  const complete = r.playerIds.every(pid => !!results[pid])
+  const hasReplay = Object.values(results).some(entry => entry.finished)
+  const replayAt = complete && hasReplay ? Date.now() + 2000 : r.replayAt
+  match.value = { ...match.value, round: { ...r, results, replayAt } }
+  commit()
+  if (id === playerId) pendingReplay.value = null
+}
+
+/** The host ends the round for everyone at two minutes, even without a finish. */
+function checkRoundDeadline(): void {
+  const r = match.value.round
+  if (!isHost.value || !match.value.started || match.value.completed || !r || allFinished.value ||
+      Date.now() < r.startAt + MULTIPLAYER_RACE_LIMIT_MS) return
+  const results = { ...r.results }
+  for (const id of r.playerIds) {
+    if (!results[id]) results[id] = { ticks: 0, deaths: 0, replay: '', finished: false }
+  }
+  const hasReplay = Object.values(results).some(entry => entry.finished)
+  match.value = {
+    ...match.value,
+    round: { ...r, results, replayAt: hasReplay ? Date.now() + 2000 : r.replayAt },
+  }
+  commit()
+}
+
+let roundDeadlineInterval: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  roundDeadlineInterval = setInterval(checkRoundDeadline, 250)
+})
+
 function recordFinish(id: string, replay: string, roundNumber: number): void {
   if (!isHost.value || typeof replay !== 'string' || !replay || replay.length > 100_000) return
   const r = match.value.round
   if (!r || r.number !== roundNumber || !r.playerIds.includes(id) || r.results[id]) return
+  if (Date.now() >= r.startAt + MULTIPLAYER_RACE_LIMIT_MS) {
+    checkRoundDeadline()
+    return
+  }
   const level = LEVELS.find(l => l.key === r.levelKey)
   if (!level) return
   let result: RaceResult
   try {
     const run = simulate(compileLevel(level.data), decodeInputs(replay))
-    if (!run.finished) return
+    if (!run.finished || run.ticks * DT * 1000 >= MULTIPLAYER_RACE_LIMIT_MS) return
     result = { ticks: run.ticks, deaths: run.deaths, replay, finished: true }
   } catch { return }
   const results = { ...r.results, [id]: result }
@@ -294,6 +337,8 @@ function onMessage(message: LobbyEvent): void {
     commit()
   } else if (message.kind === 'finish') {
     recordFinish(message.playerId, message.replay, message.round)
+  } else if (message.kind === 'give-up') {
+    recordDNF(message.playerId, message.round, message.deaths)
   } else if (message.kind === 'result') {
     if (!isHost.value && players.value.some(p => p.host)) receiveResult(message)
   }
@@ -520,6 +565,16 @@ function skipReplay(): void {
   showResults.value = true
   commit()
 }
+function onRaceGiveUp(result: { deaths: number }): void {
+  const round = match.value.round
+  if (!round || round.results[playerId]) return
+  if (isHost.value) recordDNF(playerId, round.number, result.deaths)
+  else {
+    try { session?.send({ kind: 'give-up', playerId, round: round.number, deaths: result.deaths }) }
+    catch (e) { error.value = e instanceof Error ? e.message : 'Could not send DNF' }
+  }
+}
+
 function onRaceFinished(result: { replay: string }): void {
   pendingReplay.value = result.replay
   if (!match.value.round) return
@@ -528,6 +583,7 @@ function onRaceFinished(result: { replay: string }): void {
 }
 
 onBeforeUnmount(() => {
+  clearInterval(roundDeadlineInterval)
   clearGameOverIntro()
   session?.close()
 })
@@ -561,6 +617,7 @@ onBeforeUnmount(() => {
       exit-text="Leave match"
       @exit="void leave()"
       @finished="onRaceFinished"
+      @gave-up="onRaceGiveUp"
     />
     <div v-else-if="match.started && match.round && allFinished && match.round.replayAt !== null && !replayRace && !showResults" class="multiplayer">
       <header class="top"><button class="ib" type="button" aria-label="Leave match" @click="void leave()">←</button><div class="title"><b>Multiplayer</b><small>{{ raceLevel?.title ?? 'Race' }}</small></div></header>

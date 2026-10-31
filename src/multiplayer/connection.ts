@@ -35,6 +35,7 @@ export type LobbyEvent =
   | { kind: 'state'; state: MatchState }
   | { kind: 'ready'; playerId: string; ready: boolean }
   | { kind: 'finish'; playerId: string; replay: string; round: number }
+  | { kind: 'give-up'; playerId: string; round: number; deaths: number }
   | { kind: 'result'; playerId: string; round: number; result: RaceResult }
 
 export interface LobbySession {
@@ -100,7 +101,7 @@ export function connectLobby(
   channel.bind('client-plungee', (data: unknown) => {
     if (!active || !data || typeof data !== 'object' || !('kind' in data)) return
     const kind = (data as { kind?: unknown }).kind
-    if (kind === 'sync-request' || kind === 'state' || kind === 'ready' || kind === 'finish' || kind === 'result') {
+    if (kind === 'sync-request' || kind === 'state' || kind === 'ready' || kind === 'finish' || kind === 'give-up' || kind === 'result') {
       onEvent(data as LobbyEvent)
     }
   })
