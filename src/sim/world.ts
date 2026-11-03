@@ -21,6 +21,8 @@ import {
   ACCEL_GROUND,
   LAND_EVENT_VY,
   MAX_STEP,
+  FALLING_SPIKE_WARN_TICKS,
+  MOVER_H,
   SHOVE_MIN_OVERLAP,
   MOVE_SPEED,
   PLAYER_H,
@@ -33,12 +35,14 @@ import {
   VOID_MARGIN,
 } from './constants'
 import { crusherState, hammerState, laserPhase, sawPos } from './hazards'
-import type { CompiledLevel } from './level'
+import type { CompiledLaser, CompiledLevel } from './level'
+import { laserBeam } from './laser'
+import { fallingSpikeBottom, type FallingSpikeState } from './fallingSpike'
 import { blinkSolid, isBlinkKind, K_BELT_L, K_BELT_R, K_BRITTLE, K_GATE_D, K_GATE_L, K_GATE_R, K_ICE, K_ONEWAY } from './tiles'
 import { approach, clamp } from './mathx'
 import type { InputDir, Rect } from './types'
 
-export type DeathCause = 'spikes' | 'laser' | 'saw' | 'crusher' | 'void'
+export type DeathCause = 'spikes' | 'fallingSpike' | 'laser' | 'saw' | 'crusher' | 'void'
 
 export type SimEvent =
   | { type: 'death'; x: number; y: number; cause: DeathCause }
@@ -50,6 +54,8 @@ export type SimEvent =
   /** Eine brüchige Plattform beginnt zu zerbröckeln (einmal pro Betreten) */
   | { type: 'crumble' }
   | { type: 'finish'; ticks: number }
+  | { type: 'fallingSpikeBreak'; x: number; y: number }
+  | { type: 'fallingSpikeWarn' }
 
 export interface PlayerState {
   x: number
@@ -98,6 +104,7 @@ export class World {
   ridingCrusher = -1
   /** Aktuelle Rechtecke der Quetscher (Lage zum Ende des laufenden Ticks), fest für Kollision und Zerquetschen */
   crusherRects: Rect[] = []
+  fallingSpikes: FallingSpikeState[] = []
   /** Blinkzellen, in denen der Spieler zu Beginn des Ticks steckt: bleiben durchlässig, bis er draußen ist */
   private blinkIgnore: number[] = []
 
@@ -121,6 +128,7 @@ export class World {
     this.prevY = this.p.y
     this.crumble = new Int32Array(level.cols * level.rows).fill(-1)
     this.syncCrushers()
+    this.resetFallingSpikes()
   }
 
   /** Unabhängige Kopie des Simulationszustands (z. B. für Suchverfahren und Tests). */
@@ -141,6 +149,7 @@ export class World {
     w.riding = this.riding
     w.ridingCrusher = this.ridingCrusher
     w.syncCrushers()
+    w.fallingSpikes = this.fallingSpikes.map(spike => ({ ...spike }))
     return w
   }
 
@@ -153,6 +162,7 @@ export class World {
     const p = this.p
     this.prevX = p.x
     this.prevY = p.y
+    for (const spike of this.fallingSpikes) spike.prevY = spike.y
 
     if (p.dead) {
       p.deadTimer--
@@ -192,6 +202,9 @@ export class World {
       return
     }
 
+    this.advanceFallingSpikes()
+    if (p.dead) { this.tick++; return }
+
     // Bewegung mit Kollision
     const wasOnGround = p.onGround
     const impact = p.vy
@@ -201,6 +214,7 @@ export class World {
     this.moveX(p.vx * DT)
     const bottomBefore = p.y + PLAYER_H
     this.moveY(p.vy * DT)
+    if (p.dead) { this.tick++; return }
     this.landOnMovers(bottomBefore)
     this.ridingCrusher = this.crusherUnderfoot()
     if (p.onGround && !wasOnGround && impact > LAND_EVENT_VY) {
@@ -225,6 +239,7 @@ export class World {
     p.dead = false
     p.deadTimer = 0
     this.crumble.fill(-1)
+    this.resetFallingSpikes()
     this.surface = 0
     this.riding = -1
     this.ridingCrusher = -1
@@ -268,7 +283,8 @@ export class World {
     }
 
     for (const l of lv.lasers) {
-      if (l.beam && laserPhase(l, now) === 'on' && overlaps(p.x, p.y, l.beam)) {
+      const beam = laserPhase(l, now) === 'on' ? this.laserBeam(l) : null
+      if (beam && overlaps(p.x, p.y, beam)) {
         this.kill('laser')
         return
       }
@@ -363,6 +379,98 @@ export class World {
     })
   }
 
+  private resetFallingSpikes(): void {
+    this.fallingSpikes = this.level.fallingSpikes.map(spike => ({ ...spike, prevY: spike.y, vy: 0, releaseTick: -1, phase: 'hanging' }))
+  }
+
+  private breakFallingSpike(spike: FallingSpikeState): void {
+    spike.phase = 'gone'
+    spike.vy = 0
+    this.emit({ type: 'fallingSpikeBreak', x: spike.x + TILE / 2, y: spike.y + TILE / 2 })
+  }
+
+  /** Independent of player-only blink exceptions; a falling object sees the actual block state. */
+  private fallingSpikeSolid(col: number, row: number): boolean {
+    const lv = this.level
+    if (col < 0 || col >= lv.cols || row < 0) return true
+    if (row >= lv.rows) return false
+    const i = row * lv.cols + col
+    const k = lv.kind[i]
+    if (isBlinkKind(k)) return blinkSolid(k, this.tick + 1)
+    if (k === K_BRITTLE) return !(this.crumble[i] >= 0 && this.tick + 1 - this.crumble[i] >= CRUMBLE_DELAY)
+    return lv.solid[i] === 1 || k === K_ONEWAY
+  }
+
+  private fallingSpikeObstacles(self: FallingSpikeState): Rect[] {
+    return [
+      ...this.crusherRects,
+      ...this.level.movers.map(m => ({ ...sawPos(m, this.tick + 1), w: m.w * TILE, h: MOVER_H })),
+      ...this.fallingSpikes.filter(s => s !== self && s.phase !== 'gone').map(s => ({ x: s.x, y: s.y, w: TILE, h: TILE })),
+    ]
+  }
+
+  private canReleaseSpike(spike: FallingSpikeState, obstacles: Rect[]): boolean {
+    const p = this.p
+    const bottom = spike.y + TILE
+    if (p.x + PLAYER_W <= spike.x + EPS || p.x >= spike.x + TILE - EPS || p.y < bottom - EPS) return false
+    const col = Math.floor(spike.x / TILE)
+    for (let row = Math.floor((bottom + EPS) / TILE); row * TILE < p.y - EPS; row++) {
+      if (this.fallingSpikeSolid(col, row)) return false
+    }
+    return !obstacles.some(r => r.x < spike.x + TILE - EPS && r.x + r.w > spike.x + EPS && r.y >= bottom - EPS && r.y < p.y - EPS)
+  }
+
+  private advanceFallingSpikes(): void {
+    const p = this.p
+    // Lower traps resolve first so stacked falling bodies cannot pass through one another.
+    const ordered = [...this.fallingSpikes].sort((a, b) => b.y - a.y)
+    for (const spike of ordered) {
+      if (spike.phase === 'gone') continue
+      const obstacles = this.fallingSpikeObstacles(spike)
+      if (spike.phase === 'hanging') {
+        if (!this.canReleaseSpike(spike, obstacles)) continue
+        spike.phase = 'warning'
+        spike.releaseTick = this.tick + 1 + FALLING_SPIKE_WARN_TICKS
+        this.emit({ type: 'fallingSpikeWarn' })
+        continue
+      }
+      if (spike.phase === 'warning' && this.tick + 1 < spike.releaseTick) continue
+      spike.phase = 'falling'
+      const oldY = spike.y
+      const riding = Math.abs(p.y + PLAYER_H - oldY) <= 0.01 && p.x < spike.x + TILE - EPS && p.x + PLAYER_W > spike.x + EPS
+      spike.vy = Math.min(TERMINAL_VY, spike.vy + GRAVITY * DT)
+      let nextY = oldY + spike.vy * DT
+      let impacted = false
+      const oldBottom = oldY + TILE
+      const col = Math.floor(spike.x / TILE)
+      for (let row = Math.floor((oldBottom + EPS) / TILE); row * TILE <= nextY + TILE + EPS && row < this.level.rows; row++) {
+        if (row * TILE < oldBottom - EPS || !this.fallingSpikeSolid(col, row)) continue
+        nextY = Math.min(nextY, row * TILE - TILE)
+        impacted = true
+        break
+      }
+      for (const rect of obstacles) {
+        if (spike.x >= rect.x + rect.w - EPS || spike.x + TILE <= rect.x + EPS) continue
+        if (rect.y >= oldBottom - EPS && rect.y <= nextY + TILE + EPS) {
+          nextY = Math.min(nextY, rect.y - TILE)
+          impacted = true
+        }
+      }
+      nextY = Math.max(oldY, nextY)
+      spike.y = nextY
+      if (riding) p.y += nextY - oldY
+      const beforeTip = fallingSpikeBottom({ x: spike.x, y: oldY }, p.x, p.x + PLAYER_W)
+      const afterTip = fallingSpikeBottom(spike, p.x, p.x + PLAYER_W)
+      if (!riding && beforeTip !== null && afterTip !== null && p.y >= oldY - EPS && p.y < afterTip + EPS && p.y + PLAYER_H > beforeTip + EPS) {
+        this.breakFallingSpike(spike)
+        this.kill('fallingSpike')
+        return
+      }
+      if (impacted) this.breakFallingSpike(spike)
+      else if (nextY > this.level.height + VOID_MARGIN) spike.phase = 'gone'
+    }
+  }
+
   /**
    * Fährt alle Quetscher zur Lage des nächsten Ticks, in kleinen Teilschritten (kein Überspringen).
    * Ein Quetscher ist fest: Er schiebt den Spieler vor sich her und trägt ihn, wenn er darauf steht. Getötet wird
@@ -429,6 +537,13 @@ export class World {
   }
 
   // --- Kollision gegen das Tile-Raster ---------------------------------------
+
+  /** Renderers may supply interpolated times; simulation always uses the current integer tick. */
+  laserBeam(laser: CompiledLaser, tick = this.tick, movementTick = tick): Rect | null {
+    const alpha = clamp(movementTick - this.tick + 1, 0, 1)
+    const spikes = this.fallingSpikes.filter(s => s.phase !== 'gone').map(s => ({ x: s.x, y: s.prevY + (s.y - s.prevY) * alpha }))
+    return laserBeam(this.level, laser, tick, this.crumble, movementTick, spikes)
+  }
 
   private isSolid(col: number, row: number): boolean {
     const lv = this.level
@@ -676,6 +791,21 @@ export class World {
       if (!overlapsInner(p.x, p.y, r)) continue
       if (axis === 'x') return step > 0 ? r.x - PLAYER_W : r.x + r.w
       return step > 0 ? r.y - PLAYER_H : r.y + r.h
+    }
+    for (const spike of this.fallingSpikes) {
+      if (spike.phase === 'gone') continue
+      const bottom = fallingSpikeBottom(spike, p.x, p.x + PLAYER_W)
+      if (bottom === null || p.y + PLAYER_H <= spike.y + EPS || p.y >= bottom - EPS) continue
+      if (axis === 'x') {
+        const halfWidth = TILE / 2 * (1 - Math.max(0, p.y - spike.y) / TILE)
+        return step > 0 ? spike.x + TILE / 2 - halfWidth - PLAYER_W : spike.x + TILE / 2 + halfWidth
+      }
+      if (step > 0 && p.y - step + PLAYER_H <= spike.y + EPS) return spike.y - PLAYER_H
+      if (step < 0 && p.y - step >= bottom - EPS) {
+        this.breakFallingSpike(spike)
+        this.kill('fallingSpike')
+        return bottom
+      }
     }
     return null
   }

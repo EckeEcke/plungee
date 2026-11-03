@@ -48,7 +48,7 @@ describe('Blinkblock', () => {
     expect(w.p.y).toBeGreaterThan(10 * TILE)
   })
 
-  it('blockiert keine Laserstrahlen', () => {
+  it('blockiert Laser nur in der festen Phase', () => {
     const lv = new LevelBuilder('short')
       .plat(5, 5, 5, 'X')
       .laser(5, 2, 'd')
@@ -57,7 +57,10 @@ describe('Blinkblock', () => {
       .build()
     const c = compileLevel(lv)
     expect(c.solid[5 * 16 + 5]).toBe(0)
-    expect(c.lasers[0].beam!.h).toBeGreaterThan(5 * TILE)
+    const w = new World(c)
+    expect(w.laserBeam(c.lasers[0])!.h).toBe(2 * TILE)
+    w.tick = BLINK_HALF
+    expect(w.laserBeam(c.lasers[0])!.h).toBeGreaterThan(5 * TILE)
   })
 
   it('ist rein vom Tick abhängig (clone läuft identisch)', () => {

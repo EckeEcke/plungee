@@ -206,7 +206,8 @@ export class Game {
       else if (e.type === 'death') playSfx('death')
       else if (e.type === 'checkpoint') playSfx('checkpoint')
       else if (e.type === 'hammer') playSfx('hammer')
-      else if (e.type === 'crumble') playSfx('crumble')
+      else if (e.type === 'crumble' || e.type === 'fallingSpikeWarn') playSfx('crumble')
+      else if (e.type === 'fallingSpikeBreak') playSfx('land')
       else if (e.type === 'respawn') playSfx('respawn')
       else if (e.type === 'land' && e.strength > LAND_SOUND_VY) {
         // Nur nach schnellem Fall hörbar, dezent und mit der Geschwindigkeit lauter
@@ -330,7 +331,7 @@ export class Game {
       const ph = laserPhase(lasers[i], w.tick)
       if (ph === this.laserPrev[i]) continue
       this.laserPrev[i] = ph
-      if (!lasers[i].beam || ph === 'off') continue
+      if (ph === 'off' || !w.laserBeam(lasers[i])) continue
       const y = (lasers[i].row + 0.5) * TILE
       if (y < this.renderer.camY - TILE || y > this.renderer.camY + this.renderer.viewH + TILE) continue
       playSfx(ph === 'warn' ? 'laserWarn' : 'laserOn')

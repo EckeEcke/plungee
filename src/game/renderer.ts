@@ -240,6 +240,9 @@ export class Renderer {
         })
         this.shake = Math.max(this.shake, 5)
         break
+      case 'fallingSpikeBreak':
+        this.particles.burst(e.x, e.y, 7, { colors: [th.danger, th.dangerDark, th.solidTop], speed: 65, life: 0.3, size: 1.6, gravity: 180, shape: 'square' })
+        break
       case 'respawn':
         this.particles.burst(e.x + PLAYER_W / 2, e.y + PLAYER_H / 2, 8, {
           colors: th.decor,
@@ -406,13 +409,19 @@ export class Renderer {
 
     this.drawCeiling(ctx)
     this.drawTiles(ctx, world, t)
-    for (const l of lv.lasers) this.drawLaser(ctx, l, world.tick)
+    for (const l of lv.lasers) this.drawLaser(ctx, l, world, t, running ? world.tick - 1 + alpha : world.tick)
     for (let i = 0; i < lv.checkpoints.length; i++) {
       const c = lv.checkpoints[i]
       this.drawCheckpoint(ctx, c.col, c.row, world.checkpointIndex === i, this.checkpointAnim[i])
     }
     this.drawGoal(ctx)
     for (const s of lv.spikes) this.drawSpikes(ctx, s)
+    for (const spike of world.fallingSpikes) {
+      if (spike.phase !== 'gone') {
+        const wobble = spike.phase === 'warning' ? Math.sin(t * 2.4) * 0.8 : 0
+        this.drawFallingSpike(ctx, spike.x + wobble, spike.prevY + (spike.y - spike.prevY) * (running ? alpha : 1))
+      }
+    }
     for (let i = 0; i < lv.springs.length; i++) this.drawSpring(ctx, lv.springs[i], this.springAnim[i])
     for (const sw of lv.saws) this.drawSaw(ctx, sw, t)
     for (const m of lv.movers) this.drawMover(ctx, m, running ? world.tick - 1 + alpha : world.tick)
@@ -902,13 +911,14 @@ export class Renderer {
     ctx.restore()
   }
 
-  private drawLaser(ctx: CanvasRenderingContext2D, l: CompiledLaser, tick: number): void {
+  private drawLaser(ctx: CanvasRenderingContext2D, l: CompiledLaser, world: World, renderTick: number, movementTick: number): void {
+    const tick = world.tick
     const th = this.theme
     const phase = laserPhase(l, tick)
     const blink = Math.floor(tick / 4) % 2 === 0
 
-    if (l.beam) {
-      const b = l.beam
+    const b = world.laserBeam(l, renderTick, movementTick)
+    if (b) {
       const vertical = l.dir === 'u' || l.dir === 'd'
       const cx = b.x + b.w / 2
       const cy = b.y + b.h / 2
@@ -1025,6 +1035,33 @@ export class Renderer {
     ctx.beginPath()
     ctx.arc(0, 0, 1.5, 0, TAU)
     ctx.fill()
+    ctx.restore()
+  }
+
+  private drawFallingSpike(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    const th = this.theme
+    ctx.save()
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = 1.4
+    ctx.strokeStyle = th.outline
+    ctx.fillStyle = th.danger
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.lineTo(x + TILE, y)
+    ctx.lineTo(x + TILE / 2, y + TILE)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = th.dangerDark
+    ctx.beginPath()
+    ctx.moveTo(x + TILE - 2, y + 2)
+    ctx.lineTo(x + TILE / 2, y + TILE - 2)
+    ctx.lineTo(x + TILE / 2, y + 2)
+    ctx.closePath()
+    ctx.fill()
+    // The flat, light cap communicates the safe standing surface.
+    ctx.fillStyle = th.solidTop
+    ctx.fillRect(x + 1, y + 1, TILE - 2, 2)
     ctx.restore()
   }
 

@@ -33,6 +33,9 @@ defineProps<{ tool: ToolId }>()
     <template v-else-if="tool === 'spikes'">
       <path d="M3 19 L8 7 L12 19 L16 7 L21 19 Z" fill="currentColor" />
     </template>
+    <template v-else-if="tool === 'fallingSpike'">
+      <path d="M4 4 H20 L12 19 Z" fill="currentColor" />
+    </template>
     <template v-else-if="tool === 'laser'">
       <rect x="3" y="8" width="6" height="8" rx="2" fill="currentColor" />
       <path d="M12 12 H21" stroke-dasharray="2 3" />

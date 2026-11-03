@@ -61,11 +61,11 @@ describe('Torblock seitlich', () => {
     expect(w.p.x).toBeLessThan(9 * TILE - PLAYER_W + 1)
   })
 
-  it('blockiert keine Laser', () => {
+  it('lÃ¤sst Laser aus der offenen Richtung durch', () => {
     const level = compileLevel(floor(7).wall(9, 8, 9, '{').laser(15, 9, 'l').build())
-    expect(level.lasers[0].beam).not.toBeNull()
+    expect(new World(level).laserBeam(level.lasers[0])).not.toBeNull()
     // Strahl reicht bis an die Zelle neben dem Emitter und weiter durch das Tor
-    expect(level.lasers[0].beam!.w).toBeGreaterThan(5 * TILE)
+    expect(new World(level).laserBeam(level.lasers[0])!.w).toBeGreaterThan(5 * TILE)
   })
 })
 

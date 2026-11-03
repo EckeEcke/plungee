@@ -60,6 +60,9 @@ export const MOVER_H = 8
 export const MAX_MOVER_LEN = 12
 export const MAX_MOVER_W = 4
 
+/** Brief warning before a triggered falling spike releases (0.3 s). */
+export const FALLING_SPIKE_WARN_TICKS = 18
+
 // Quetscher: fester Block, gleitet entlang einer Bahn, schiebt und trägt den Spieler und zerquetscht ihn nur an Wänden
 export const MAX_CRUSHER_LEN = 12
 export const MAX_CRUSHER_SIZE = 3

@@ -294,7 +294,7 @@ describe('Laser', () => {
   it('Strahl endet an soliden Tiles', () => {
     const d = base().wall(10, 8, 9).laser(15, 9, 'l').build()
     const level = compileLevel(d)
-    const beam = level.lasers[0].beam!
+    const beam = new World(level).laserBeam(level.lasers[0])!
     expect(beam.x).toBe(11 * TILE)
     expect(beam.w).toBe(4 * TILE)
     // Spieler links der Wand ist sicher

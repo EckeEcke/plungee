@@ -21,6 +21,8 @@ function entityCall(e: EntityData): string {
         : `b.spring(${e.x}, ${e.y}, ${e.power})`
     case 'spikes':
       return `b.spikes(${e.x}, ${e.y}, '${e.dir}')`
+    case 'fallingSpike':
+      return `b.fallingSpike(${e.x}, ${e.y})`
     case 'laser':
       return `b.laser(${e.x}, ${e.y}, '${e.dir}', { period: ${e.period}, on: ${e.on}, phase: ${e.phase} })`
     case 'saw':
@@ -65,7 +67,7 @@ export function levelToTs(level: LevelData, fnName = levelFnName(level.title)): 
 
   lines.push('')
   lines.push('  // Objekte')
-  const order = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw', 'mover', 'crusher']
+  const order = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'fallingSpike', 'laser', 'hammer', 'saw', 'mover', 'crusher']
   const sorted = [...level.entities].sort(
     (a, b) => order.indexOf(a.t) - order.indexOf(b.t) || a.y - b.y || a.x - b.x,
   )

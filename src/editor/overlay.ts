@@ -304,7 +304,15 @@ function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): voi
   const ghostSize = tool === 'crusher' ? (cr?.size ?? 1) * TILE : TILE
   ctx.globalAlpha = blocked ? 0.28 : 0.42
   ctx.fillStyle = fill
-  ctx.fillRect(x + 1, y + 1, ghostSize - 2, ghostSize - 2)
+  if (tool === 'fallingSpike') {
+    ctx.fillStyle = th.danger
+    ctx.beginPath()
+    ctx.moveTo(x + 1, y + 1)
+    ctx.lineTo(x + TILE - 1, y + 1)
+    ctx.lineTo(x + TILE / 2, y + TILE - 1)
+    ctx.closePath()
+    ctx.fill()
+  } else ctx.fillRect(x + 1, y + 1, ghostSize - 2, ghostSize - 2)
   ctx.globalAlpha = 0.9
   ctx.strokeStyle = th.outline
   ctx.lineWidth = 1

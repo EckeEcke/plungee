@@ -29,7 +29,7 @@ export const K_GATE_D = 9
 export const K_GATE_L = 10
 export const K_GATE_R = 11
 
-/** Torblock: nur in einer Richtung durchlässig, blockiert weder Laser noch den Spieler von innen */
+/** Directional gate: player and laser collisions respect its blocking direction. */
 export function isGateKind(k: number): boolean {
   return k === K_ONEWAY || k === K_GATE_D || k === K_GATE_L || k === K_GATE_R
 }

@@ -11,6 +11,8 @@ export type EntityData =
   | { t: 'spring'; x: number; y: number; power: 1 | 2; dir?: 'u' | 'l' | 'r' }
   /** dir = Richtung, in die die Spitzen zeigen */
   | { t: 'spikes'; x: number; y: number; dir: Dir }
+  /** Single downward-pointing spike; releases when a player enters its clear drop path. */
+  | { t: 'fallingSpike'; x: number; y: number }
   /** Emitter belegt die Zelle (solide). period/on/phase in Ticks */
   | { t: 'laser'; x: number; y: number; dir: Dir; period: number; on: number; phase: number }
   /** Aufhängepunkt = Zellmitte. len in Tiles, amp in Grad, period in Ticks, phase 0..1 */

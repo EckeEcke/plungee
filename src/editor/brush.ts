@@ -9,6 +9,7 @@ export type ToolId =
   | 'checkpoint'
   | 'spring'
   | 'spikes'
+  | 'fallingSpike'
   | 'laser'
   | 'hammer'
   | 'saw'
@@ -22,6 +23,7 @@ export const TOOLS: Array<{ id: ToolId; label: string }> = [
   { id: 'erase', label: 'Eraser' },
   { id: 'spring', label: 'Spring' },
   { id: 'spikes', label: 'Spikes' },
+  { id: 'fallingSpike', label: 'Dropspike' },
   { id: 'laser', label: 'Laser' },
   { id: 'hammer', label: 'Hammer' },
   { id: 'saw', label: 'Saw' },
@@ -57,8 +59,8 @@ export const TILE_HINTS: Record<TileChar, string> = {
   v: 'Gate ▼: you can fall through it, but cannot jump up through it from below.',
   '{': 'Gate ◀: you can walk through it to the left, but not from the left side.',
   '}': 'Gate ▶: you can walk through it to the right, but not from the right side.',
-  X: 'Blink block ◆: solid for 1.5 s, then gone for 1.5 s. Flickers shortly before it vanishes. Opposite of ●.',
-  O: 'Blink block ●: gone while ◆ is solid, and the other way round. Lasers shine through both.',
+  X: 'Blink block ◆: solid for 1.5 s, then gone for 1.5 s. Flickers shortly before it vanishes. Opposite of ●. Blocks lasers while solid.',
+  O: 'Blink block ●: gone while ◆ is solid, and the other way round. Blocks lasers while solid.',
 }
 
 export const LASER_SPEEDS = [
@@ -150,6 +152,8 @@ export function makeEntity(tool: ToolId, c: number, r: number, brush: Brush): En
       return { ...brush.spring, x: c, y: r }
     case 'spikes':
       return { ...brush.spikes, x: c, y: r }
+    case 'fallingSpike':
+      return { t: 'fallingSpike', x: c, y: r }
     case 'laser':
       return { ...brush.laser, x: c, y: r }
     case 'hammer':

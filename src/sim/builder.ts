@@ -72,6 +72,11 @@ export class LevelBuilder {
     return this
   }
 
+  fallingSpike(col: number, row: number): this {
+    this.entities.push({ t: 'fallingSpike', x: col, y: row })
+    return this
+  }
+
   laser(
     col: number,
     row: number,

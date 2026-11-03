@@ -1,7 +1,6 @@
 import { DEG_TO_RAD } from './mathx'
 import { isBlinkKind, isGateKind, K_BRITTLE, K_SOLID, kindOfChar, TILE_LINE_RE } from './tiles'
 import {
-  LASER_BEAM_W,
   LEVEL_COLS,
   LEVEL_ROWS,
   MAX_CRUSHER_LEN,
@@ -37,8 +36,6 @@ export interface CompiledLaser {
   period: number
   on: number
   phase: number
-  /** Strahl-Rechteck; null, wenn der Strahl sofort blockiert ist */
-  beam: Rect | null
 }
 
 export interface CompiledHammer extends HammerParams {
@@ -101,6 +98,7 @@ export interface CompiledLevel {
   checkpoints: CompiledCheckpoint[]
   springs: CompiledSpring[]
   spikes: CompiledSpikes[]
+  fallingSpikes: Array<{ x: number; y: number }>
   lasers: CompiledLaser[]
   hammers: CompiledHammer[]
   saws: CompiledSaw[]
@@ -181,6 +179,9 @@ export function validateLevel(data: LevelData): string[] {
       case 'spikes':
         if (!DIRS.includes(e.dir)) errors.push(`${label}: invalid direction`)
         if (solidAt(e.x, e.y)) errors.push(`${label}: spikes are inside a wall`)
+        break
+      case 'fallingSpike':
+        if (solidAt(e.x, e.y)) errors.push(`${label}: falling spike is inside a wall`)
         break
       case 'laser':
         if (!DIRS.includes(e.dir)) errors.push(`${label}: invalid direction`)
@@ -281,7 +282,7 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
       const k = kindOfChar(data.tiles[r][c])
       const i = r * cols + c
       kind[i] = k
-      // Blinkblöcke und Torblöcke blockieren keine Laser; ihre Festigkeit entscheidet die Welt je Tick
+      // Dynamic blink blocks and directional gates are evaluated separately by the world and laser raycast.
       solid[i] = k !== 0 && !isGateKind(k) && !isBlinkKind(k) ? 1 : 0
       if (k === K_BRITTLE) brittle.push(i)
     }
@@ -310,6 +311,7 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
     checkpoints: [],
     springs: [],
     spikes: [],
+    fallingSpikes: [],
     lasers: [],
     hammers: [],
     saws: [],
@@ -356,6 +358,9 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
       case 'spikes':
         level.spikes.push({ col: e.x, row: e.y, dir: e.dir, rect: spikeRect(px, py, e.dir) })
         break
+      case 'fallingSpike':
+        level.fallingSpikes.push({ x: px, y: py })
+        break
       case 'laser':
         level.lasers.push({
           col: e.x,
@@ -364,7 +369,6 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
           period: e.period,
           on: e.on,
           phase: e.phase % e.period,
-          beam: beamRect(solid, cols, rows, e.x, e.y, e.dir),
         })
         break
       case 'hammer':
@@ -455,38 +459,5 @@ function spikeRect(px: number, py: number, dir: Dir): Rect {
       return { x: px + 8, y: py + 3, w: 8, h: 10 }
     case 'r':
       return { x: px, y: py + 3, w: 8, h: 10 }
-  }
-}
-
-function beamRect(
-  solid: Uint8Array,
-  cols: number,
-  rows: number,
-  col: number,
-  row: number,
-  dir: Dir,
-): Rect | null {
-  const dc = dir === 'l' ? -1 : dir === 'r' ? 1 : 0
-  const dr = dir === 'u' ? -1 : dir === 'd' ? 1 : 0
-  let c = col + dc
-  let r = row + dr
-  let n = 0
-  while (c >= 0 && c < cols && r >= 0 && r < rows && !solid[r * cols + c]) {
-    n++
-    c += dc
-    r += dr
-  }
-  if (n === 0) return null
-  const len = n * TILE
-  const off = (TILE - LASER_BEAM_W) / 2
-  switch (dir) {
-    case 'd':
-      return { x: col * TILE + off, y: (row + 1) * TILE, w: LASER_BEAM_W, h: len }
-    case 'u':
-      return { x: col * TILE + off, y: row * TILE - len, w: LASER_BEAM_W, h: len }
-    case 'r':
-      return { x: (col + 1) * TILE, y: row * TILE + off, w: len, h: LASER_BEAM_W }
-    case 'l':
-      return { x: col * TILE - len, y: row * TILE + off, w: len, h: LASER_BEAM_W }
   }
 }
