@@ -56,6 +56,8 @@ export type SimEvent =
   | { type: 'finish'; ticks: number }
   | { type: 'fallingSpikeBreak'; x: number; y: number }
   | { type: 'fallingSpikeWarn' }
+  | { type: 'beltAttach' }
+  | { type: 'beltRelease' }
 
 export interface PlayerState {
   x: number
@@ -102,6 +104,8 @@ export class World {
   riding = -1
   /** Index des Quetschers, auf dem der Spieler steht (-1 = keiner) */
   ridingCrusher = -1
+  /** Direction of the conveyor holding the player's head; zero means detached. */
+  ceilingBelt: InputDir = 0
   /** Aktuelle Rechtecke der Quetscher (Lage zum Ende des laufenden Ticks), fest für Kollision und Zerquetschen */
   crusherRects: Rect[] = []
   fallingSpikes: FallingSpikeState[] = []
@@ -148,6 +152,7 @@ export class World {
     w.surface = this.surface
     w.riding = this.riding
     w.ridingCrusher = this.ridingCrusher
+    w.ceilingBelt = this.ceilingBelt
     w.syncCrushers()
     w.fallingSpikes = this.fallingSpikes.map(spike => ({ ...spike }))
     return w
@@ -171,6 +176,9 @@ export class World {
       return
     }
 
+    if (this.ceilingBelt && (input === -this.ceilingBelt || p.stun > 0 || this.beltAbove() !== this.ceilingBelt)) {
+      this.setCeilingBelt(0)
+    }
     // Horizontale Steuerung (während Betäubung keine Eingabe)
     if (p.stun > 0) {
       p.stun--
@@ -183,6 +191,7 @@ export class World {
         if (this.surface === K_BELT_L) target -= BELT_SPEED
         else if (this.surface === K_BELT_R) target += BELT_SPEED
       }
+      if (this.ceilingBelt) target += this.ceilingBelt * BELT_SPEED
       p.vx = approach(p.vx, target, acc)
       if (input !== 0) p.facing = input
     }
@@ -192,7 +201,8 @@ export class World {
     this.collectBlinkIgnore()
 
     // Schwerkraft
-    p.vy += GRAVITY * DT
+    if (this.ceilingBelt) p.vy = 0
+    else p.vy += GRAVITY * DT
     if (p.vy > TERMINAL_VY) p.vy = TERMINAL_VY
 
     // Quetscher fahren zuerst: sie schieben den Spieler, tragen ihn oder zerquetschen ihn
@@ -212,8 +222,12 @@ export class World {
     this.carry()
     p.onGround = false
     this.moveX(p.vx * DT)
+    if (this.ceilingBelt && this.beltAbove() !== this.ceilingBelt) {
+      this.setCeilingBelt(0)
+      p.vy = GRAVITY * DT
+    }
     const bottomBefore = p.y + PLAYER_H
-    this.moveY(p.vy * DT)
+    this.moveY(p.vy * DT, input)
     if (p.dead) { this.tick++; return }
     this.landOnMovers(bottomBefore)
     this.ridingCrusher = this.crusherUnderfoot()
@@ -243,12 +257,14 @@ export class World {
     this.surface = 0
     this.riding = -1
     this.ridingCrusher = -1
+    this.ceilingBelt = 0
     this.prevX = p.x
     this.prevY = p.y
     this.emit({ type: 'respawn', x: p.x, y: p.y })
   }
 
   private kill(cause: DeathCause): void {
+    this.ceilingBelt = 0
     const p = this.p
     p.dead = true
     p.deadTimer = RESPAWN_TICKS
@@ -743,7 +759,7 @@ export class World {
     }
   }
 
-  private moveY(dy: number): void {
+  private moveY(dy: number, input: InputDir = 0): void {
     const p = this.p
     let remaining = dy
     while (remaining !== 0) {
@@ -777,11 +793,30 @@ export class World {
         if (this.solidInCols(r, left, right) || this.gateInCols(r, left, right, K_GATE_D, beforeY >= (r + 1) * TILE - EPS)) {
           p.y = (r + 1) * TILE
           p.vy = 0
+          const belt = this.beltAbove()
+          if (belt && input !== -belt && p.stun === 0) this.setCeilingBelt(belt)
           return
         }
       }
       if (blocked) return
     }
+  }
+
+  private setCeilingBelt(direction: InputDir): void {
+    const previous = this.ceilingBelt
+    this.ceilingBelt = direction
+    if (!previous && direction) this.emit({ type: 'beltAttach' })
+    else if (previous && !direction) this.emit({ type: 'beltRelease' })
+  }
+
+  /** Use the head centre so grazing a belt edge cannot leave the player hanging. */
+  private beltAbove(): InputDir {
+    const row = Math.round(this.p.y / TILE) - 1
+    if (row < 0 || row >= this.level.rows || Math.abs(this.p.y - (row + 1) * TILE) > EPS) return 0
+    const col = Math.floor((this.p.x + PLAYER_W / 2) / TILE)
+    if (col < 0 || col >= this.level.cols) return 0
+    const kind = this.level.kind[row * this.level.cols + col]
+    return kind === K_BELT_L ? -1 : kind === K_BELT_R ? 1 : 0
   }
 
   /** Stößt der Spieler nach diesem Schritt an einen Quetscher? Gibt die korrigierte Koordinate zurück oder null. */

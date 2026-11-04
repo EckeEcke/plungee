@@ -42,6 +42,7 @@ import { drawCharacter, type CharacterColors } from './character'
 import type { Ghost } from './ghost'
 import { applyLook, look } from './look'
 import { Particles } from './particles'
+import { beltPose } from './beltPose'
 import type { Theme } from './theme'
 
 const WRAP = 1000
@@ -270,6 +271,18 @@ export class Renderer {
         })
         break
       }
+      case 'beltAttach':
+        this.particles.burst(world.p.x + PLAYER_W / 2, world.p.y + 1, 4, {
+          colors: [th.help, th.help2],
+          speed: 35,
+          life: 0.25,
+          size: 1,
+          gravity: 70,
+          shape: 'star',
+          angle: Math.PI / 2,
+          spread: Math.PI * 0.8,
+        })
+        break
       case 'land':
         this.squash = Math.min(0.9, e.strength / TERMINAL_VY)
         this.particles.burst(world.p.x + PLAYER_W / 2, world.p.y + PLAYER_H, 5, {
@@ -1338,7 +1351,9 @@ export class Renderer {
         : baseColors
 
       ctx.save()
-      ctx.translate(x + PLAYER_W / 2, y + PLAYER_H)
+      const grip = w.ceilingBelt ? beltPose(this.time) : null
+      ctx.translate(x + PLAYER_W / 2, y + (grip?.anchorY ?? PLAYER_H))
+      if (grip) ctx.scale(grip.sx, grip.sy)
       ctx.globalAlpha = g.spec.solid ? 0.95 : 0.42
       drawCharacter(ctx, colors, runnerLook, {
         face: p.facing * 0.7,
@@ -1373,11 +1388,12 @@ export class Renderer {
     const vyN = clamp(p.vy / TERMINAL_VY, -1, 1)
     const fall = Math.max(0, vyN)
     const stretch = fall * 0.16 + Math.max(0, -vyN) * 0.12
-    const sx = 1 + this.squash * 0.32 - stretch * 0.6
-    const sy = 1 - this.squash * 0.32 + stretch
+    const grip = world.ceilingBelt ? beltPose(this.time) : null
+    const sx = grip?.sx ?? (1 + this.squash * 0.32 - stretch * 0.6)
+    const sy = grip?.sy ?? (1 - this.squash * 0.32 + stretch)
 
     ctx.save()
-    ctx.translate(x + PLAYER_W / 2, y + PLAYER_H)
+    ctx.translate(x + PLAYER_W / 2, y + (grip?.anchorY ?? PLAYER_H))
     ctx.scale(sx, sy)
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'

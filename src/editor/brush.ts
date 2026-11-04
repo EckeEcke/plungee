@@ -52,8 +52,8 @@ export const TILE_OPTIONS: Array<{ ch: TileChar; label: string }> = [
 export const TILE_HINTS: Record<TileChar, string> = {
   '#': 'Normal solid block.',
   I: 'Slippery: you speed up and slow down slowly.',
-  '<': 'Conveyor belt: pushes the player left.',
-  '>': 'Conveyor belt: pushes the player right.',
+  '<': 'Conveyor belt: carries left. Cling underneath; steer right to release.',
+  '>': 'Conveyor belt: carries right. Cling underneath; steer left to release.',
   B: 'Crumbles shortly after you step on it and regrows after a few seconds.',
   '=': 'Gate ▲: you can pass upwards. From above it is solid, so you can stand on it.',
   v: 'Gate ▼: you can fall through it, but cannot jump up through it from below.',

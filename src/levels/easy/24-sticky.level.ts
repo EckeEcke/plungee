@@ -1,0 +1,58 @@
+import { LevelBuilder } from '../../sim/builder'
+import type { LevelData } from '../../sim/types'
+
+export function createStickyLevel(): LevelData {
+  const b = new LevelBuilder('short', "Sticky")
+
+  // Blöcke
+  b.plat(0, 0, 15, '>')
+  b.plat(4, 12, 12)
+  b.plat(5, 0, 4)
+  b.plat(5, 5, 11, '<')
+  b.plat(5, 12, 12)
+  b.plat(9, 5, 5)
+  b.plat(10, 5, 5)
+  b.plat(10, 6, 10, '>')
+  b.plat(10, 11, 15)
+  b.plat(14, 0, 6)
+  b.plat(14, 9, 12)
+  b.plat(15, 0, 12)
+  b.plat(16, 0, 12, '<')
+  b.plat(20, 3, 3)
+  b.plat(20, 11, 13)
+  b.plat(20, 14, 15, '=')
+  b.plat(21, 3, 3)
+  b.plat(22, 3, 3)
+  b.plat(23, 3, 3)
+  b.plat(24, 3, 3)
+  b.plat(25, 3, 3)
+  b.plat(26, 3, 3)
+  b.plat(26, 4, 15, '>')
+  b.plat(29, 11, 15)
+  b.plat(30, 11, 15)
+  b.plat(31, 0, 15)
+  b.plat(32, 0, 15)
+  b.plat(33, 0, 15)
+  b.plat(34, 0, 15)
+  b.plat(35, 0, 15)
+  b.plat(36, 0, 15)
+  b.plat(37, 0, 15)
+  b.plat(38, 0, 15)
+  b.plat(39, 0, 15)
+
+  // Objekte
+  b.spawn(1, 4)
+  b.goal(14, 28)
+  b.checkpoint(13, 19)
+  b.spring(4, 4, 2)
+  b.spring(11, 9, 2)
+  b.spring(6, 13, 1)
+  b.spring(11, 19, 1)
+  b.spring(4, 30, 2)
+  b.spikes(7, 14, 'u')
+  b.spikes(8, 14, 'u')
+  b.mover(14, 20, 'v', 6, { w: 2, period: 180, phase: 0 })
+  b.crusher(5, 23, 'u', 6, { size: 3, period: 220, phase: 0 })
+
+  return b.build()
+}

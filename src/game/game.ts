@@ -205,9 +205,9 @@ export class Game {
       if (e.type === 'spring') playSfx('spring')
       else if (e.type === 'death') playSfx('death')
       else if (e.type === 'checkpoint') playSfx('checkpoint')
-      else if (e.type === 'hammer') playSfx('hammer')
+      else if (e.type === 'hammer' || e.type === 'beltAttach') playSfx('hammer')
       else if (e.type === 'crumble' || e.type === 'fallingSpikeWarn') playSfx('crumble')
-      else if (e.type === 'fallingSpikeBreak') playSfx('land')
+      else if (e.type === 'fallingSpikeBreak' || e.type === 'beltRelease') playSfx('land')
       else if (e.type === 'respawn') playSfx('respawn')
       else if (e.type === 'land' && e.strength > LAND_SOUND_VY) {
         // Nur nach schnellem Fall hörbar, dezent und mit der Geschwindigkeit lauter
@@ -347,7 +347,7 @@ export class Game {
     const p = w.p
     const grounded = p.onGround && !p.dead
     setLoop('ice', grounded && w.surface === K_ICE && Math.abs(p.vx) > 12)
-    setLoop('belt', grounded && (w.surface === K_BELT_L || w.surface === K_BELT_R))
+    setLoop('belt', !p.dead && (!!w.ceilingBelt || (grounded && (w.surface === K_BELT_L || w.surface === K_BELT_R))))
   }
 
   /** Liegt mindestens ein Blinkblock im sichtbaren Bereich (mit einer Kachel Rand)? Wird nur beim Taktwechsel geprüft. */
