@@ -104,5 +104,5 @@ test('docking emits one small themed particle burst at the head, not continuousl
   assert.equal(count, 4)
   assert.deepEqual(options.colors, [MEMPHIS_DARK.help, MEMPHIS_DARK.help2])
   assert.equal(options.shape, 'star')
-  assert.ok(options.life <= 0.3)
+  assert.ok(options.life !== undefined && options.life <= 0.3)
 })
