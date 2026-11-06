@@ -55,12 +55,15 @@ function roundRect(
 
 /** Abstand der Augenmitten von der Mittellinie; große Augen rücken näher zusammen, damit sie im Körper bleiben */
 function eyeX(style: Look['eyes']): number {
-  return style === 'big' ? 2.9 : style === 'lashes' ? 2.8 : EYE_X
+  if (style === 'googly') return 2.7
+  return style === 'big' || style === 'focus' ? 2.9 : style === 'lashes' ? 2.8 : EYE_X
 }
 
 /** Augengröße (Weiß, Pupille) je nach Stil; beim Fallen wachsen sie */
 function eyeSize(style: Look['eyes'], fall: number): { er: number; pr: number } {
   switch (style) {
+    case 'focus':
+      return { er: 2.75 + fall * 0.5, pr: 2.1 + fall * 0.5 }
     case 'big':
       return { er: 2.75 + fall * 0.5, pr: 1.5 + fall * 0.2 }
     case 'small':
@@ -137,8 +140,62 @@ function drawPattern(ctx: CanvasRenderingContext2D, th: CharacterColors, look: L
   ctx.fillStyle = pc.hex ?? th.outline
   ctx.beginPath()
 
+  if (look.pattern === 'sprinkles' || look.pattern === 'squiggles' || look.pattern === 'mini-zigzags') {
+    const squiggles = look.pattern === 'squiggles'
+    const count = squiggles ? 4 : 5
+    // Fixed staggered motifs: no random positions or flickering between frames.
+    for (let row = 0; row < count; row++) {
+      for (let col = 0; col < count; col++) {
+        const x = -5.6 + col * (squiggles ? 3.6 : 2.7) + (row % 2) * 1.1
+        const y = -11.3 + row * (squiggles ? 3.5 : 2.6)
+        ctx.save()
+        ctx.translate(x, y)
+        ctx.rotate(((row * 3 + col * 5) % 8) * Math.PI / 4)
+        if (look.pattern === 'sprinkles') {
+          ctx.moveTo(-0.55, 0)
+          ctx.lineTo(0.55, 0)
+        } else if (look.pattern === 'squiggles') {
+          // Inward curl with eight corners per turn and space between windings.
+          for (let step = 0; step <= 14; step++) {
+            const angle = step * Math.PI / 4
+            const radius = 1.55 - step * 0.09
+            const sx = Math.cos(angle) * radius
+            const sy = Math.sin(angle) * radius
+            if (step === 0) ctx.moveTo(sx, sy)
+            else ctx.lineTo(sx, sy)
+          }
+        } else {
+          ctx.moveTo(-0.9, 0.45)
+          ctx.lineTo(-0.3, -0.45)
+          ctx.lineTo(0.3, 0.45)
+          ctx.lineTo(0.9, -0.45)
+        }
+        ctx.restore()
+      }
+    }
+    ctx.lineJoin = squiggles ? 'miter' : 'round'
+    ctx.lineCap = 'round'
+    // Thin border on both sides keeps pale line motifs readable.
+    ctx.strokeStyle = th.outline
+    ctx.lineWidth = squiggles ? 0.42 : 0.9
+    ctx.stroke()
+    ctx.strokeStyle = pc.hex ?? th.outline
+    ctx.lineWidth = squiggles ? 0.24 : 0.6
+    ctx.stroke()
+    ctx.restore()
+    return
+  }
+
   if (look.pattern === 'stripes') {
     for (let y = -12 + 1; y < 0; y += 3) ctx.rect(-6, y, 12, 1.4)
+  } else if (look.pattern === 'diagonal') {
+    for (let x = -18; x < 6; x += 4) {
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x + 12, -12)
+      ctx.lineTo(x + 13.4, -12)
+      ctx.lineTo(x + 1.4, 0)
+      ctx.closePath()
+    }
   } else if (look.pattern === 'checks') {
     // 4 × 4 Felder à 3 Einheiten
     for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) ctx.rect(-6 + i * 3, -12 + j * 3, 3, 3)
@@ -228,11 +285,28 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, th: CharacterColors
   } else {
     for (const ex of [-ex0, ex0]) {
       const cx = ex + face
+      const googly = look.eyes === 'googly'
+      const smallEye = googly && ex > 0
+      const eyeRadius = googly ? (smallEye ? 1.8 + fall * 0.4 : 2.6 + fall * 0.3) : er
+      const pupilRadius = googly ? (smallEye ? 0.85 + fall * 0.1 : 1.2 + fall * 0.15) : pr
+      const focus = look.eyes === 'focus'
+      const gazeScale = focus ? 0.15 : smallEye ? 0.7 : 1
+      let gazeX = pose.ox * gazeScale
+      let gazeY = pose.oy * gazeScale
+      if (focus) {
+        // Keep a visible white rim even at the furthest gaze position.
+        const distance = Math.hypot(gazeX, gazeY)
+        const maxOffset = Math.max(0, eyeRadius - pupilRadius - 0.25)
+        if (distance > maxOffset) {
+          gazeX *= maxOffset / distance
+          gazeY *= maxOffset / distance
+        }
+      }
       ctx.fillStyle = th.eyeWhite
       ctx.beginPath()
-      ctx.arc(cx, EYE_Y, er, 0, TAU)
+      ctx.arc(cx, EYE_Y, eyeRadius, 0, TAU)
       ctx.fill()
-      if (look.pattern !== 'none') {
+      if (look.pattern !== 'none' || look.color === 'cream') {
         // Dünner Rand, damit die Augen auch auf weißen oder gleichfarbigen Mustern klar zu erkennen sind
         ctx.strokeStyle = th.outline
         ctx.lineWidth = 0.45
@@ -240,7 +314,7 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, th: CharacterColors
       }
       ctx.fillStyle = th.pupil
       ctx.beginPath()
-      ctx.arc(cx + pose.ox, EYE_Y + pose.oy, pr, 0, TAU)
+      ctx.arc(cx + gazeX, EYE_Y + gazeY, pupilRadius, 0, TAU)
       ctx.fill()
       if (look.eyes === 'sleepy') {
         // Oberlid: deckt die obere Hälfte ab, öffnet sich beim Fallen

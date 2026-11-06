@@ -2,6 +2,7 @@ import {
   HAMMER_HEAD_R,
   K_BELT_L,
   K_BELT_R,
+  K_CLIMBER,
   BLINK_WARN,
   K_BLINK_A,
   K_BRITTLE,
@@ -42,7 +43,7 @@ import { drawCharacter, type CharacterColors } from './character'
 import type { Ghost } from './ghost'
 import { applyLook, look } from './look'
 import { Particles } from './particles'
-import { beltPose } from './beltPose'
+import { beltPose, climberPose } from './beltPose'
 import type { Theme } from './theme'
 
 const WRAP = 1000
@@ -272,14 +273,17 @@ export class Renderer {
         break
       }
       case 'beltAttach':
-        this.particles.burst(world.p.x + PLAYER_W / 2, world.p.y + 1, 4, {
+      case 'climberAttach':
+        this.particles.burst(
+          world.p.x + (e.type === 'climberAttach' ? (e.direction > 0 ? PLAYER_W : 0) : PLAYER_W / 2),
+          world.p.y + (e.type === 'climberAttach' ? PLAYER_H / 2 : 1), 4, {
           colors: [th.help, th.help2],
           speed: 35,
           life: 0.25,
           size: 1,
           gravity: 70,
           shape: 'star',
-          angle: Math.PI / 2,
+          angle: e.type === 'climberAttach' ? (e.direction > 0 ? Math.PI : 0) : Math.PI / 2,
           spread: Math.PI * 0.8,
         })
         break
@@ -604,13 +608,15 @@ export class Renderer {
           ctx.globalAlpha = 1
         } else if (k === K_BELT_L || k === K_BELT_R) {
           this.drawBeltMarks(ctx, c, r, k === K_BELT_L ? -1 : 1, t, up)
+        } else if (k === K_CLIMBER) {
+          this.drawBeltMarks(ctx, c, r, 1, t, up, true)
         }
       }
     }
   }
 
   /** Förderband: laufende Pfeile auf dem Block */
-  private drawBeltMarks(ctx: CanvasRenderingContext2D, c: number, r: number, dir: number, t: number, up: boolean): void {
+  private drawBeltMarks(ctx: CanvasRenderingContext2D, c: number, r: number, dir: number, t: number, up: boolean, vertical = false): void {
     const th = this.theme
     const x0 = c * TILE
     const y0 = r * TILE
@@ -618,6 +624,11 @@ export class Renderer {
     ctx.beginPath()
     ctx.rect(x0, y0, TILE, TILE)
     ctx.clip()
+    if (vertical) {
+      ctx.translate(x0 + TILE / 2, y0 + TILE / 2)
+      ctx.rotate(-Math.PI / 2)
+      ctx.translate(-x0 - TILE / 2, -y0 - TILE / 2)
+    }
     ctx.strokeStyle = th.help2
     ctx.lineWidth = 2
     ctx.lineCap = 'round'
@@ -1351,8 +1362,9 @@ export class Renderer {
         : baseColors
 
       ctx.save()
-      const grip = w.ceilingBelt ? beltPose(this.time) : null
-      ctx.translate(x + PLAYER_W / 2, y + (grip?.anchorY ?? PLAYER_H))
+      const climb = w.climbing ? climberPose(this.time, w.climbing) : null
+      const grip = climb ?? (w.ceilingBelt ? beltPose(this.time) : null)
+      ctx.translate(x + PLAYER_W / 2 + (climb?.anchorX ?? 0), y + (grip?.anchorY ?? PLAYER_H))
       if (grip) ctx.scale(grip.sx, grip.sy)
       ctx.globalAlpha = g.spec.solid ? 0.95 : 0.42
       drawCharacter(ctx, colors, runnerLook, {
@@ -1388,12 +1400,13 @@ export class Renderer {
     const vyN = clamp(p.vy / TERMINAL_VY, -1, 1)
     const fall = Math.max(0, vyN)
     const stretch = fall * 0.16 + Math.max(0, -vyN) * 0.12
-    const grip = world.ceilingBelt ? beltPose(this.time) : null
+    const climb = world.climbing ? climberPose(this.time, world.climbing) : null
+    const grip = climb ?? (world.ceilingBelt ? beltPose(this.time) : null)
     const sx = grip?.sx ?? (1 + this.squash * 0.32 - stretch * 0.6)
     const sy = grip?.sy ?? (1 - this.squash * 0.32 + stretch)
 
     ctx.save()
-    ctx.translate(x + PLAYER_W / 2, y + (grip?.anchorY ?? PLAYER_H))
+    ctx.translate(x + PLAYER_W / 2 + (climb?.anchorX ?? 0), y + (grip?.anchorY ?? PLAYER_H))
     ctx.scale(sx, sy)
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'

@@ -507,8 +507,9 @@ onBeforeUnmount(() => {
                 :aria-pressed="tileKind === o.ch"
                 @click="pickTileKind(o.ch)"
               >
-                <i class="sw" :class="{ belt: o.ch === '<' || o.ch === '>' }" :style="swatchStyle(o.ch)">
-                  <template v-if="o.ch === '<'">◀</template>
+                <i class="sw" :class="{ belt: o.ch === '<' || o.ch === '>' || o.ch === 'C' }" :style="swatchStyle(o.ch)">
+                  <template v-if="o.ch === 'C'">▲</template>
+                  <template v-else-if="o.ch === '<'">◀</template>
                   <template v-else-if="o.ch === '>'">▶</template>
                   <template v-else-if="o.ch === 'v'">▼</template>
                   <template v-else-if="o.ch === '{'">◀</template>

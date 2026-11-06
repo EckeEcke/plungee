@@ -41,10 +41,10 @@ export default async (request: Request): Promise<Response> => {
     const safe = (v: unknown, options: string[], fallback: string) =>
       typeof v === 'string' && options.includes(v) ? v : fallback
     const look = {
-      color: safe(l.color, ['pink', 'orange', 'lime', 'green', 'blue', 'purple'], 'pink'),
-      eyes: safe(l.eyes, ['round', 'big', 'small', 'sleepy', 'lashes'], 'round'),
-      pattern: safe(l.pattern, ['none', 'stripes', 'dots', 'checks', 'stars', 'hearts'], 'none'),
-      patternColor: safe(l.patternColor, ['white', 'ink', 'yellow', 'rose', 'mint', 'sky', 'orange'], 'white'),
+      color: safe(l.color, ['pink', 'coral', 'orange', 'yellow', 'lime', 'green', 'turquoise', 'blue', 'purple', 'lavender', 'cream'], 'pink'),
+      eyes: safe(l.eyes, ['round', 'big', 'focus', 'small', 'googly', 'sleepy', 'lashes'], 'round'),
+      pattern: safe(l.pattern, ['none', 'stripes', 'diagonal', 'sprinkles', 'squiggles', 'mini-zigzags', 'dots', 'checks', 'stars', 'hearts'], 'none'),
+      patternColor: safe(l.patternColor, ['white', 'ink', 'yellow', 'rose', 'mint', 'sky', 'orange', 'turquoise', 'coral', 'lavender'], 'white'),
     }
     const channel_data = JSON.stringify({ user_id: id, user_info: { name: name || 'Guest', look, host } })
     const signature = createHmac('sha256', secret).update(`${socket}:${channel}:${channel_data}`).digest('hex')

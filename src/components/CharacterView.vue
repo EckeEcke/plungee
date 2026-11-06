@@ -116,6 +116,23 @@ function randomize(): void {
           <!-- Character preview -->
 
           <section class="stage">
+          <button class="preview-action randomize" type="button" aria-label="Randomize" title="Randomize" @click="randomize">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <g fill="currentColor" stroke="none">
+                <circle cx="7.5" cy="7.5" r="1.4" />
+                <circle cx="16.5" cy="7.5" r="1.4" />
+                <circle cx="12" cy="12" r="1.4" />
+                <circle cx="7.5" cy="16.5" r="1.4" />
+                <circle cx="16.5" cy="16.5" r="1.4" />
+              </g>
+            </svg>
+          </button>
+          <button class="preview-action reset" type="button" aria-label="Reset to default" title="Reset to default" @click="reset">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 10a8 8 0 1 1 1.5 7M4 4v6h6" />
+            </svg>
+          </button>
             <div class="character-preview">
               <CharacterCanvas
                 :colors="themed"
@@ -217,25 +234,6 @@ function randomize(): void {
             </div>
           </section>
 
-          <!-- Actions -->
-
-          <div class="actions">
-            <button
-              class="reset"
-              type="button"
-              @click="randomize"
-            >
-              🎲 Randomize
-            </button>
-
-            <button
-              class="reset"
-              type="button"
-              @click="reset"
-            >
-              Reset to default
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -351,6 +349,7 @@ function randomize(): void {
 /* Character preview */
 
 .stage {
+  position: relative;
   display: grid;
   justify-items: center;
 }
@@ -433,24 +432,25 @@ h3.disabled {
 
 /* Actions */
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-}
-
-.reset {
+.preview-action {
+  position: absolute;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 9px;
   cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  padding: 8px 18px;
   color: var(--text);
   background: var(--panel);
   border: 2px solid var(--line);
-  border-radius: 999px;
+  border-radius: 12px;
 }
+.preview-action.randomize { right: 8px; }
+.preview-action.reset { right: 8px; top: 60px; }
+.preview-action svg { width: 22px; height: 22px; }
+.preview-action:hover { background: var(--accent); color: var(--outline); }
+.preview-action:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* Mobile: compact sticky preview */
 

@@ -38,7 +38,7 @@ import { crusherState, hammerState, laserPhase, sawPos } from './hazards'
 import type { CompiledLaser, CompiledLevel } from './level'
 import { laserBeam } from './laser'
 import { fallingSpikeBottom, type FallingSpikeState } from './fallingSpike'
-import { blinkSolid, isBlinkKind, K_BELT_L, K_BELT_R, K_BRITTLE, K_GATE_D, K_GATE_L, K_GATE_R, K_ICE, K_ONEWAY } from './tiles'
+import { blinkSolid, isBlinkKind, K_BELT_L, K_BELT_R, K_BRITTLE, K_CLIMBER, K_GATE_D, K_GATE_L, K_GATE_R, K_ICE, K_ONEWAY } from './tiles'
 import { approach, clamp } from './mathx'
 import type { InputDir, Rect } from './types'
 
@@ -57,6 +57,7 @@ export type SimEvent =
   | { type: 'fallingSpikeBreak'; x: number; y: number }
   | { type: 'fallingSpikeWarn' }
   | { type: 'beltAttach' }
+  | { type: 'climberAttach'; direction: -1 | 1 }
   | { type: 'beltRelease' }
 
 export interface PlayerState {
@@ -106,6 +107,7 @@ export class World {
   ridingCrusher = -1
   /** Direction of the conveyor holding the player's head; zero means detached. */
   ceilingBelt: InputDir = 0
+  climbing: InputDir = 0
   /** Aktuelle Rechtecke der Quetscher (Lage zum Ende des laufenden Ticks), fest für Kollision und Zerquetschen */
   crusherRects: Rect[] = []
   fallingSpikes: FallingSpikeState[] = []
@@ -153,6 +155,7 @@ export class World {
     w.riding = this.riding
     w.ridingCrusher = this.ridingCrusher
     w.ceilingBelt = this.ceilingBelt
+    w.climbing = this.climbing
     w.syncCrushers()
     w.fallingSpikes = this.fallingSpikes.map(spike => ({ ...spike }))
     return w
@@ -201,6 +204,7 @@ export class World {
     this.collectBlinkIgnore()
 
     // Schwerkraft
+    if (this.climbing && input !== this.climbing && p.stun === 0 && p.vy === -BELT_SPEED) p.vy = 0
     if (this.ceilingBelt) p.vy = 0
     else p.vy += GRAVITY * DT
     if (p.vy > TERMINAL_VY) p.vy = TERMINAL_VY
@@ -227,6 +231,10 @@ export class World {
       p.vy = GRAVITY * DT
     }
     const bottomBefore = p.y + PLAYER_H
+    const previousClimb = this.climbing
+    this.climbing = p.stun === 0 && !this.ceilingBelt && this.climberBeside(input) ? input : 0
+    if (this.climbing && this.climbing !== previousClimb) this.emit({ type: 'climberAttach', direction: this.climbing })
+    if (this.climbing) p.vy = -BELT_SPEED
     this.moveY(p.vy * DT, input)
     if (p.dead) { this.tick++; return }
     this.landOnMovers(bottomBefore)
@@ -258,6 +266,7 @@ export class World {
     this.riding = -1
     this.ridingCrusher = -1
     this.ceilingBelt = 0
+    this.climbing = 0
     this.prevX = p.x
     this.prevY = p.y
     this.emit({ type: 'respawn', x: p.x, y: p.y })
@@ -265,6 +274,7 @@ export class World {
 
   private kill(cause: DeathCause): void {
     this.ceilingBelt = 0
+    this.climbing = 0
     const p = this.p
     p.dead = true
     p.deadTimer = RESPAWN_TICKS
@@ -800,6 +810,22 @@ export class World {
       }
       if (blocked) return
     }
+  }
+
+  /** Only real side contact counts; standing above or touching the underside does not. */
+  private climberBeside(input: InputDir): boolean {
+    if (!input) return false
+    const edge = input > 0 ? this.p.x + PLAYER_W : this.p.x
+    const boundary = Math.round(edge / TILE) * TILE
+    if (Math.abs(edge - boundary) > EPS) return false
+    const col = Math.round(edge / TILE) - (input < 0 ? 1 : 0)
+    if (col < 0 || col >= this.level.cols) return false
+    const top = Math.max(0, Math.floor((this.p.y + EPS) / TILE))
+    const bottom = Math.min(this.level.rows - 1, Math.floor((this.p.y + PLAYER_H - EPS) / TILE))
+    for (let row = top; row <= bottom; row++) {
+      if (this.level.kind[row * this.level.cols + col] === K_CLIMBER) return true
+    }
+    return false
   }
 
   private setCeilingBelt(direction: InputDir): void {

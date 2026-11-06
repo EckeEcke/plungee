@@ -73,7 +73,7 @@ watch(
 )
 // Ohne Dauerschleife (Animation aus) bei jeder Änderung neu zeichnen
 watch(
-  () => [props.colors, props.look.color, props.look.eyes],
+  () => [props.colors, props.look.color, props.look.eyes, props.look.pattern, props.look.patternColor],
   () => {
     if (!props.animate || reducedMotion()) draw(0)
   },

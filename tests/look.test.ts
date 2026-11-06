@@ -25,11 +25,11 @@ describe('Aussehen der Figur: Daten', () => {
   })
 
   it('es gibt fünf Augenformen, darunter die mit Wimpern', () => {
-    expect(EYES.map((e) => e.id)).toEqual(['round', 'big', 'small', 'sleepy', 'lashes'])
+    expect(EYES.map((e) => e.id)).toEqual(['round', 'big', 'focus', 'small', 'googly', 'sleepy', 'lashes'])
   })
 
   it('es gibt fünf Muster plus "kein Muster", die Musterfarben sind eindeutig und ohne Rot', () => {
-    expect(PATTERNS.map((p) => p.id)).toEqual(['none', 'stripes', 'dots', 'checks', 'stars', 'hearts'])
+    expect(PATTERNS.map((p) => p.id)).toEqual(['none', 'stripes', 'diagonal', 'sprinkles', 'squiggles', 'mini-zigzags', 'dots', 'checks', 'stars', 'hearts'])
     expect(new Set(PATTERN_COLORS.map((c) => c.id)).size).toBe(PATTERN_COLORS.length)
     for (const c of PATTERN_COLORS) {
       if (c.hex === null) continue
@@ -39,7 +39,7 @@ describe('Aussehen der Figur: Daten', () => {
     }
   })
 
-  it('Farben: eindeutige Namen, gültige Hex-Werte, kein Rot und kein Gelb', () => {
+  it('Farben: eindeutige Namen, gültige Hex-Werte, kein Rot, Gelb und Cream sind erlaubt', () => {
     expect(new Set(COLORS.map((c) => c.id)).size).toBe(COLORS.length)
     for (const c of COLORS) {
       if (c.body === null) continue
@@ -47,7 +47,6 @@ describe('Aussehen der Figur: Daten', () => {
       expect(c.shade, c.id).toMatch(/^#[0-9A-Fa-f]{6}$/)
       const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.body!.slice(i, i + 2), 16))
       expect(r > 200 && g < 110 && b < 110, `${c.id} wirkt rot (Gefahr)`).toBe(false)
-      expect(r > 220 && g > 190 && b < 120, `${c.id} wirkt gelb (Ziel)`).toBe(false)
       expect(r > 225 && g > 225 && b > 225, `${c.id} ist (fast) weiß`).toBe(false)
     }
   })
@@ -83,6 +82,8 @@ function recorder() {
   const ctx = {
     save() {},
     restore() {},
+    translate() {},
+    rotate() {},
     beginPath() {},
     closePath() {},
     fill() {},

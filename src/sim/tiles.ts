@@ -2,18 +2,18 @@ import { BLINK_HALF, BLINK_PERIOD } from './constants'
 
 /**
  * Block-Typen. In LevelData.tiles steht je Zelle ein Zeichen:
- *  '.' leer   '#' Block   'I' Eis   '<' Band links   '>' Band rechts   'B' brüchig   '=' Einweg
+ *  '.' leer   '#' Block   'I' Eis   '<' Band links   '>' Band rechts   'C' Climber   'B' brüchig   '=' Einweg
  *  'X' / 'O' Blinkblock (wechseln sich im globalen Takt ab, 'X' startet fest)
  *  Torblöcke sind nur in eine Richtung durchlässig und blockieren von der anderen Seite:
  *  '=' nach oben offen (Einweg-Plattform: von unten durchs Tor, von oben darauf stehen)
  *  'v' nach unten offen (von oben fällt man durch, von unten stößt man an)
  *  '{' nach links offen, '}' nach rechts offen (von der Gegenseite kommt man nicht hinein)
  */
-export const TILE_CHARS = ['#', 'I', '<', '>', 'B', '=', 'X', 'O', 'v', '{', '}'] as const
+export const TILE_CHARS = ['#', 'I', '<', '>', 'C', 'B', '=', 'X', 'O', 'v', '{', '}'] as const
 export type TileChar = (typeof TILE_CHARS)[number]
 
 /** Gültige Zeichen in einer Tile-Zeile */
-export const TILE_LINE_RE = /[^.#I<>B=XOv{}]/
+export const TILE_LINE_RE = /[^.#I<>CB=XOv{}]/
 
 // Numerische Codes im kompilierten Raster
 export const K_EMPTY = 0
@@ -28,6 +28,8 @@ export const K_BLINK_B = 8
 export const K_GATE_D = 9
 export const K_GATE_L = 10
 export const K_GATE_R = 11
+/** Solid climber: pressing into either side carries the player upwards. */
+export const K_CLIMBER = 12
 
 /** Directional gate: player and laser collisions respect its blocking direction. */
 export function isGateKind(k: number): boolean {
@@ -52,6 +54,8 @@ export function blinkTicksLeft(tick: number): number {
 
 export function kindOfChar(ch: string): number {
   switch (ch) {
+    case 'C':
+      return K_CLIMBER
     case '#':
       return K_SOLID
     case 'I':

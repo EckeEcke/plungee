@@ -22,7 +22,7 @@ export class LevelBuilder {
 
   /**
    * Waagerechte Plattform, c0..c1 inklusive. kind: '#' Block (Standard), 'I' Eis,
-   * '<' / '>' Förderband, 'B' brüchig, '=' Einweg, 'v' / '{' / '}' Torblock (nach unten / links / rechts offen).
+   * '<' / '>' Förderband, 'C' Climber, 'B' brüchig, '=' Einweg, 'v' / '{' / '}' Torblock (nach unten / links / rechts offen).
    */
   plat(row: number, c0: number, c1: number, kind: TileChar = '#'): this {
     for (let c = c0; c <= c1; c++) this.grid[row][c] = kind

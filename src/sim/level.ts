@@ -131,7 +131,7 @@ export function validateLevel(data: LevelData): string[] {
   for (let r = 0; r < rows; r++) {
     const line = data.tiles[r]
     if (typeof line !== 'string' || line.length !== LEVEL_COLS || TILE_LINE_RE.test(line)) {
-      errors.push(`Row ${r}: expected ${LEVEL_COLS} characters from . # I < > B = X O v { }`)
+      errors.push(`Row ${r}: expected ${LEVEL_COLS} characters from . # I < > C B = X O v { }`)
       return errors
     }
   }
