@@ -76,5 +76,15 @@ defineProps<{ tool: ToolId }>()
       <circle cx="12" cy="12" r="8" />
       <path d="M12 7 L13.4 10.6 L17 12 L13.4 13.4 L12 17 L10.6 13.4 L7 12 L10.6 10.6 Z" fill="currentColor" />
     </template>
+    <template v-else-if="tool === 'key'">
+      <circle cx="7" cy="9" r="3.5" />
+      <circle cx="7" cy="9" r="1" />
+      <path d="M10 11 L19 20 M15 16 L17 14 M17 18 L19 16" />
+    </template>
+    <template v-else-if="tool === 'door'">
+      <path d="M5 20 V5 A2 2 0 0 1 7 3 H17 A2 2 0 0 1 19 5 V20" fill="currentColor" />
+      <path d="M8 20 V7 H16 V20" fill="var(--panel, #fff)" stroke="currentColor" />
+      <circle cx="13.5" cy="13" r="1" fill="currentColor" stroke="none" />
+    </template>
   </svg>
 </template>

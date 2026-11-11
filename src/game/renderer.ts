@@ -323,6 +323,28 @@ export class Renderer {
         })
         break
       }
+      case 'key':
+        this.particles.burst(world.p.x + PLAYER_W / 2, world.p.y, 10, {
+          colors: [th.help2, th.goal, '#ffffff'],
+          speed: 55,
+          life: 0.55,
+          size: 1.5,
+          gravity: -35,
+          shape: 'star',
+        })
+        break
+      case 'doorOpen':
+        if (lv.door) {
+          this.particles.burst(lv.door.col * TILE + 8, lv.door.row * TILE + 8, 14, {
+            colors: [th.help2, th.goal, '#ffffff'],
+            speed: 70,
+            life: 0.7,
+            size: 1.5,
+            gravity: -10,
+            shape: 'star',
+          })
+        }
+        break
       case 'finish':
         this.particles.burst(lv.goalCell.col * TILE + 8, lv.goalCell.row * TILE + 8, 44, {
           colors: [...th.decor, th.goal, '#ffffff'],
@@ -431,6 +453,8 @@ export class Renderer {
       const c = lv.checkpoints[i]
       this.drawCheckpoint(ctx, c.col, c.row, world.checkpointIndex === i, this.checkpointAnim[i])
     }
+    if (lv.door && !world.doorOpen) this.drawDoor(ctx, lv.door.col, lv.door.row)
+    if (lv.key && !world.hasKey) this.drawKey(ctx, lv.key.col, lv.key.row)
     this.drawGoal(ctx)
     for (const s of lv.spikes) this.drawSpikes(ctx, s)
     for (const spike of world.fallingSpikes) {
@@ -1323,6 +1347,75 @@ export class Renderer {
     ctx.restore()
   }
 
+  private drawKey(ctx: CanvasRenderingContext2D, col: number, row: number): void {
+    const x = col * TILE + TILE / 2
+    const y = row * TILE + TILE / 2 + Math.sin(this.time * 3.2 + col) * 1.5
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(-0.18 + Math.sin(this.time * 2.1 + row) * 0.08)
+    this.drawKeyShape(ctx, 1)
+    ctx.restore()
+  }
+
+  private drawKeyShape(ctx: CanvasRenderingContext2D, scale: number): void {
+    const th = this.theme
+    ctx.scale(scale, scale)
+    ctx.lineWidth = 1.4
+    ctx.lineJoin = 'round'
+    ctx.strokeStyle = th.outline
+    ctx.fillStyle = th.goal
+    ctx.beginPath()
+    ctx.arc(-4, 0, 3.4, 0, TAU)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = th.bgTop
+    ctx.beginPath()
+    ctx.arc(-4, 0, 1.25, 0, TAU)
+    ctx.fill()
+    ctx.fillStyle = th.goal
+    ctx.beginPath()
+    ctx.moveTo(-1, -1.5)
+    ctx.lineTo(8, -1.5)
+    ctx.lineTo(8, 1.5)
+    ctx.lineTo(6, 1.5)
+    ctx.lineTo(6, 3.8)
+    ctx.lineTo(3.7, 3.8)
+    ctx.lineTo(3.7, 1.5)
+    ctx.lineTo(-1, 1.5)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+  }
+
+  private drawDoor(ctx: CanvasRenderingContext2D, col: number, row: number): void {
+    const th = this.theme
+    const x = col * TILE
+    const y = row * TILE
+    ctx.save()
+    rr(ctx, x, y, TILE, TILE, 3, 3, 3, 3)
+    ctx.fillStyle = th.help2
+    ctx.fill()
+    ctx.save()
+    rr(ctx, x, y, TILE, TILE, 3, 3, 3, 3)
+    ctx.clip()
+    ctx.fillStyle = th.goal
+    ctx.fillRect(x, y, TILE, 4)
+    ctx.fillStyle = darken(th.help2, 0.7)
+    ctx.fillRect(x, y + TILE - 4, TILE, 4)
+    ctx.restore()
+    ctx.strokeStyle = th.outline
+    ctx.lineWidth = 1.5
+    rr(ctx, x + 0.7, y + 0.7, TILE - 1.4, TILE - 1.4, 2.3, 2.3, 2.3, 2.3)
+    ctx.stroke()
+    // Klassisches Schlüsselloch: runder Kopf plus kurzer Schlitz darunter.
+    ctx.fillStyle = th.outline
+    ctx.beginPath()
+    ctx.arc(x + TILE / 2, y + 8, 1.7, 0, TAU)
+    ctx.fill()
+    ctx.fillRect(x + TILE / 2 - 0.8, y + 8.5, 1.6, 3.8)
+    ctx.restore()
+  }
+
   private drawSpeedlines(ctx: CanvasRenderingContext2D, world: World): void {
     const p = world.p
     if (world.finished || p.dead || p.vy < 230) return
@@ -1419,6 +1512,13 @@ export class Renderer {
       stun: p.stun > 0,
       blink: Math.floor(this.time * 60) % 210 < 6,
     })
+    if (world.hasKey && !world.doorOpen) {
+      ctx.save()
+      ctx.translate(0, -20 + Math.sin(this.time * 3.3) * 1.5)
+      ctx.rotate(Math.sin(this.time * 2.2) * 0.08)
+      this.drawKeyShape(ctx, 0.62)
+      ctx.restore()
+    }
     ctx.restore()
   }
 }

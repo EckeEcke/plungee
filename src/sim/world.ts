@@ -51,6 +51,8 @@ export type SimEvent =
   | { type: 'land'; strength: number }
   | { type: 'hammer'; index: number; x: number; y: number; strength: number }
   | { type: 'checkpoint'; index: number }
+  | { type: 'key' }
+  | { type: 'doorOpen' }
   /** Eine brüchige Plattform beginnt zu zerbröckeln (einmal pro Betreten) */
   | { type: 'crumble' }
   | { type: 'finish'; ticks: number }
@@ -82,6 +84,10 @@ function overlaps(px: number, py: number, r: Rect): boolean {
   return px < r.x + r.w && px + PLAYER_W > r.x && py < r.y + r.h && py + PLAYER_H > r.y
 }
 
+function touches(px: number, py: number, r: Rect): boolean {
+  return px <= r.x + r.w + EPS && px + PLAYER_W >= r.x - EPS && py <= r.y + r.h + EPS && py + PLAYER_H >= r.y - EPS
+}
+
 export class World {
   readonly level: CompiledLevel
   tick = 0
@@ -108,6 +114,10 @@ export class World {
   /** Direction of the conveyor holding the player's head; zero means detached. */
   ceilingBelt: InputDir = 0
   climbing: InputDir = 0
+  /** True after collecting the level's key; resets on respawn. */
+  hasKey = false
+  /** True after touching the locked door with the key. */
+  doorOpen = false
   /** Aktuelle Rechtecke der Quetscher (Lage zum Ende des laufenden Ticks), fest für Kollision und Zerquetschen */
   crusherRects: Rect[] = []
   fallingSpikes: FallingSpikeState[] = []
@@ -156,6 +166,8 @@ export class World {
     w.ridingCrusher = this.ridingCrusher
     w.ceilingBelt = this.ceilingBelt
     w.climbing = this.climbing
+    w.hasKey = this.hasKey
+    w.doorOpen = this.doorOpen
     w.syncCrushers()
     w.fallingSpikes = this.fallingSpikes.map(spike => ({ ...spike }))
     return w
@@ -267,6 +279,8 @@ export class World {
     this.ridingCrusher = -1
     this.ceilingBelt = 0
     this.climbing = 0
+    this.hasKey = false
+    this.doorOpen = false
     this.prevX = p.x
     this.prevY = p.y
     this.emit({ type: 'respawn', x: p.x, y: p.y })
@@ -299,6 +313,15 @@ export class World {
     if (p.y > lv.height + VOID_MARGIN) {
       this.kill('void')
       return
+    }
+
+    if (!this.hasKey && lv.key && overlaps(p.x, p.y, lv.key.rect)) {
+      this.hasKey = true
+      this.emit({ type: 'key' })
+    }
+    if (!this.doorOpen && this.hasKey && lv.door && touches(p.x, p.y, lv.door.rect)) {
+      this.doorOpen = true
+      this.emit({ type: 'doorOpen' })
     }
 
     for (const s of lv.spikes) {
@@ -628,7 +651,7 @@ export class World {
     const c1 = Math.floor((x + PLAYER_W - EPS) / TILE)
     const r0 = Math.floor(y / TILE)
     const r1 = Math.floor((y + PLAYER_H - EPS) / TILE)
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.isSolid(c, r)) return false
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.isSolid(c, r) || this.doorAt(c, r)) return false
     return true
   }
 
@@ -751,7 +774,7 @@ export class World {
       if (step > 0) {
         const c = Math.floor((p.x + PLAYER_W - EPS) / TILE)
         // Tor nach links offen: von links kommend ist es dicht
-        if (this.solidInRows(c, top, bottom) || this.gateInRows(c, top, bottom, K_GATE_L, before + PLAYER_W <= c * TILE + EPS)) {
+        if (this.solidInRows(c, top, bottom) || this.doorInRows(c, top, bottom) || this.gateInRows(c, top, bottom, K_GATE_L, before + PLAYER_W <= c * TILE + EPS)) {
           p.x = c * TILE - PLAYER_W
           p.vx = 0
           return
@@ -759,7 +782,7 @@ export class World {
       } else {
         const c = Math.floor(p.x / TILE)
         // Tor nach rechts offen: von rechts kommend ist es dicht
-        if (this.solidInRows(c, top, bottom) || this.gateInRows(c, top, bottom, K_GATE_R, before >= (c + 1) * TILE - EPS)) {
+        if (this.solidInRows(c, top, bottom) || this.doorInRows(c, top, bottom) || this.gateInRows(c, top, bottom, K_GATE_R, before >= (c + 1) * TILE - EPS)) {
           p.x = (c + 1) * TILE
           p.vx = 0
           return
@@ -791,7 +814,7 @@ export class World {
       if (step > 0) {
         const r = Math.floor((p.y + PLAYER_H - EPS) / TILE)
         const prevBottom = p.y - step + PLAYER_H
-        if (this.solidInCols(r, left, right) || this.oneWayInCols(r, left, right, prevBottom)) {
+        if (this.solidInCols(r, left, right) || this.doorInCols(r, left, right) || this.oneWayInCols(r, left, right, prevBottom)) {
           p.y = r * TILE - PLAYER_H
           p.vy = 0
           p.onGround = true
@@ -800,7 +823,7 @@ export class World {
       } else {
         const r = Math.floor(p.y / TILE)
         // Tor nach unten offen: von unten kommend ist es dicht
-        if (this.solidInCols(r, left, right) || this.gateInCols(r, left, right, K_GATE_D, beforeY >= (r + 1) * TILE - EPS)) {
+        if (this.solidInCols(r, left, right) || this.doorInCols(r, left, right) || this.gateInCols(r, left, right, K_GATE_D, beforeY >= (r + 1) * TILE - EPS)) {
           p.y = (r + 1) * TILE
           p.vy = 0
           const belt = this.beltAbove()
@@ -874,6 +897,21 @@ export class World {
   private solidInRows(col: number, top: number, bottom: number): boolean {
     for (let r = top; r <= bottom; r++) if (this.isSolid(col, r)) return true
     return false
+  }
+
+  private doorAt(col: number, row: number): boolean {
+    const d = this.level.door
+    return !this.doorOpen && !!d && d.col === col && d.row === row
+  }
+
+  private doorInRows(col: number, top: number, bottom: number): boolean {
+    if (col < 0 || col >= this.level.cols || this.doorOpen || !this.level.door || this.level.door.col !== col) return false
+    return this.level.door.row >= top && this.level.door.row <= bottom
+  }
+
+  private doorInCols(row: number, left: number, right: number): boolean {
+    if (row < 0 || row >= this.level.rows || this.doorOpen || !this.level.door || this.level.door.row !== row) return false
+    return this.level.door.col >= left && this.level.door.col <= right
   }
 
   /** Einwegplattform: trägt nur von oben, wenn der Spieler vorher über ihrer Oberkante war */

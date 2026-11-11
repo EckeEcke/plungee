@@ -6,6 +6,8 @@ export type ToolId =
   | 'erase'
   | 'spawn'
   | 'goal'
+  | 'key'
+  | 'door'
   | 'checkpoint'
   | 'spring'
   | 'spikes'
@@ -32,6 +34,8 @@ export const TOOLS: Array<{ id: ToolId; label: string }> = [
   { id: 'checkpoint', label: 'Checkpoint' },
   { id: 'spawn', label: 'Start' },
   { id: 'goal', label: 'Goal' },
+  { id: 'key', label: 'Key' },
+  { id: 'door', label: 'Door' },
 ]
 
 /** Block-Typen, die das Werkzeug "Block" malen kann */
@@ -148,6 +152,10 @@ export function makeEntity(tool: ToolId, c: number, r: number, brush: Brush): En
       return { t: 'spawn', x: c, y: r }
     case 'goal':
       return { t: 'goal', x: c, y: r }
+    case 'key':
+      return { t: 'key', x: c, y: r }
+    case 'door':
+      return { t: 'door', x: c, y: r }
     case 'checkpoint':
       return { t: 'checkpoint', x: c, y: r }
     case 'spring':

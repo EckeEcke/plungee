@@ -8,6 +8,7 @@ import {
   LevelBuilder,
   MOVE_SPEED,
   PLAYER_H,
+  PLAYER_W,
   RESPAWN_TICKS,
   SPRING_POWER,
   TERMINAL_VY,
@@ -339,6 +340,31 @@ describe('Hammer', () => {
     const vx = w.p.vx
     w.step(vx > 0 ? -1 : 1)
     expect(Math.sign(w.p.vx)).toBe(Math.sign(vx))
+  })
+})
+
+describe('Schlüssel und Tür', () => {
+  it('verlangt Schlüssel und Tor als Paar', () => {
+    expect(validateLevel(base().door(10, 9).build()).join()).toMatch(/exactly one key and one door/)
+    expect(validateLevel(base().key(1, 1).build()).join()).toMatch(/exactly one key and one door/)
+    expect(validateLevel(base().key(1, 1).door(10, 9).build())).toEqual([])
+  })
+
+  it('sammelt den Schlüssel und öffnet damit die Tür', () => {
+    const locked = base().key(1, 1).door(10, 9).build()
+    const { w: withoutKey } = world(locked)
+    run(withoutKey, 1, 120)
+    expect(withoutKey.hasKey).toBe(false)
+    expect(withoutKey.doorOpen).toBe(false)
+    expect(withoutKey.p.x + PLAYER_W).toBeCloseTo(10 * TILE, 6)
+
+    const paired = base().key(8, 9).door(10, 9).build()
+    const { w, events } = world(paired)
+    run(w, 1, 120)
+    expect(w.hasKey).toBe(true)
+    expect(w.doorOpen).toBe(true)
+    expect(events.some((e) => e.type === 'key')).toBe(true)
+    expect(events.some((e) => e.type === 'doorOpen')).toBe(true)
   })
 })
 

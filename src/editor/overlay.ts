@@ -21,7 +21,7 @@ export interface OverlayState {
   time: number
 }
 
-const OBJECT_TOOLS: ToolId[] = ['spawn', 'goal', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw', 'mover', 'crusher']
+const OBJECT_TOOLS: ToolId[] = ['spawn', 'goal', 'key', 'door', 'checkpoint', 'spring', 'spikes', 'laser', 'hammer', 'saw', 'mover', 'crusher']
 /** Diese Objekte dürfen auch auf festen Wänden stehen */
 const WALL_OK: ToolId[] = ['laser', 'hammer', 'saw', 'mover', 'crusher']
 
@@ -292,7 +292,7 @@ function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): voi
   let blocked = false
   if (tool === 'erase') fill = th.danger
   else if (OBJECT_TOOLS.includes(tool)) {
-    fill = tool === 'spring' || tool === 'checkpoint' ? th.help : tool === 'goal' ? th.goal : th.player
+    fill = tool === 'spring' || tool === 'checkpoint' || tool === 'key' ? th.help : tool === 'goal' ? th.goal : tool === 'door' ? th.help2 : th.player
     if (tool === 'spikes' || tool === 'laser' || tool === 'hammer' || tool === 'saw' || tool === 'crusher') fill = th.danger
     if (tool === 'mover') fill = th.help
     blocked = !WALL_OK.includes(tool) && s.doc.isSolid(h.c, h.r)
@@ -312,6 +312,24 @@ function drawGhost(ctx: CanvasRenderingContext2D, s: OverlayState, h: Cell): voi
     ctx.lineTo(x + TILE / 2, y + TILE - 1)
     ctx.closePath()
     ctx.fill()
+  } else if (tool === 'key') {
+    ctx.fillStyle = th.goal
+    ctx.beginPath()
+    ctx.arc(x + 6, y + 7, 3, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = th.outline
+    ctx.beginPath()
+    ctx.arc(x + 6, y + 7, 1.1, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = th.help
+    ctx.fillRect(x + 8, y + 6, 6, 3)
+    ctx.fillRect(x + 11, y + 9, 2, 3)
+  } else if (tool === 'door') {
+    ctx.fillStyle = th.help2
+    ctx.fillRect(x + 3, y + 2, TILE - 6, TILE - 3)
+    ctx.fillStyle = th.outline
+    ctx.fillRect(x + 7, y + 7, 2, 2)
+    ctx.fillRect(x + 7.5, y + 8.5, 1, 3)
   } else ctx.fillRect(x + 1, y + 1, ghostSize - 2, ghostSize - 2)
   ctx.globalAlpha = 0.9
   ctx.strokeStyle = th.outline

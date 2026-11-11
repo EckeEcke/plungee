@@ -51,6 +51,16 @@ export class LevelBuilder {
     return this
   }
 
+  key(col: number, row: number): this {
+    this.entities.push({ t: 'key', x: col, y: row })
+    return this
+  }
+
+  door(col: number, row: number): this {
+    this.entities.push({ t: 'door', x: col, y: row })
+    return this
+  }
+
   checkpoint(col: number, row: number): this {
     this.entities.push({ t: 'checkpoint', x: col, y: row })
     return this

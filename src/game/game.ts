@@ -205,6 +205,7 @@ export class Game {
       if (e.type === 'spring') playSfx('spring')
       else if (e.type === 'death') playSfx('death')
       else if (e.type === 'checkpoint') playSfx('checkpoint')
+      else if (e.type === 'key' || e.type === 'doorOpen') playSfx('checkpoint')
       else if (e.type === 'hammer' || e.type === 'beltAttach' || e.type === 'climberAttach') playSfx('hammer')
       else if (e.type === 'crumble' || e.type === 'fallingSpikeWarn') playSfx('crumble')
       else if (e.type === 'fallingSpikeBreak' || e.type === 'beltRelease') playSfx('land')

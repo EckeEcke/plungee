@@ -361,7 +361,7 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
   <EditorView v-else-if="screen === 'edit'" :theme="theme" @exit="screen = 'menu'" />
 
   <main v-else class="menu" :style="{ ...cssVars, '--menu-text': menuText }">
-    <svg class="decor" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <svg class="decor decor-mobile" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <polygon points="60,120 110,210 10,210" fill="color-mix(in srgb, var(--c0) 50%, var(--bg1))" />
       <circle cx="330" cy="150" r="34" fill="none" stroke="color-mix(in srgb, var(--c2) 50%, var(--bg1))" stroke-width="10" />
       <path d="M250 330 q15 -22 30 0 t30 0 t30 0 t30 0" fill="none" stroke="color-mix(in srgb, var(--c1) 60%, var(--bg1))" stroke-width="10" stroke-linecap="round" />
@@ -373,6 +373,20 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
       <polygon points="90,640 150,690 90,740" fill="color-mix(in srgb, var(--c1) 50%, var(--bg1))" />
       <rect x="320" y="690" width="44" height="44" rx="10" fill="color-mix(in srgb, var(--c0) 45%, var(--bg1))" transform="rotate(14 342 712)" />
       <path d="M200 20 v40 M180 40 h40" stroke="color-mix(in srgb, var(--c3) 50%, var(--bg1))" stroke-width="10" stroke-linecap="round" />
+    </svg>
+    <svg class="decor decor-desktop" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <polygon points="210,95 285,205 135,205" fill="color-mix(in srgb, var(--c0) 50%, var(--bg1))" />
+      <circle cx="765" cy="145" r="54" fill="none" stroke="color-mix(in srgb, var(--c2) 50%, var(--bg1))" stroke-width="14" />
+      <path d="M665 285 q16 -28 32 0 t32 0 t32 0 t32 0" fill="none" stroke="color-mix(in srgb, var(--c1) 60%, var(--bg1))" stroke-width="14" stroke-linecap="round" />
+      <path d="M115 375 l28 -34 l28 34 l28 -34 l28 34 l28 -34" fill="none" stroke="color-mix(in srgb, var(--c3) 55%, var(--bg1))" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      <g fill="color-mix(in srgb, var(--c2) 55%, var(--bg1))">
+        <circle cx="760" cy="450" r="8" /><circle cx="792" cy="450" r="8" /><circle cx="824" cy="450" r="8" />
+        <circle cx="760" cy="482" r="8" /><circle cx="792" cy="482" r="8" /><circle cx="824" cy="482" r="8" />
+      </g>
+      <polygon points="250,535 330,585 250,635" fill="color-mix(in srgb, var(--c1) 50%, var(--bg1))" />
+      <rect x="690" y="545" width="70" height="70" rx="14" fill="color-mix(in srgb, var(--c0) 45%, var(--bg1))" transform="rotate(18 725 580)" />
+      <path d="M290 75 v50 M265 100 h50" stroke="color-mix(in srgb, var(--c3) 50%, var(--bg1))" stroke-width="14" stroke-linecap="round" />
+      <circle cx="285" cy="245" r="12" fill="color-mix(in srgb, var(--c1) 50%, var(--bg1))" />
     </svg>
 
     <div class="content">
@@ -496,6 +510,20 @@ const menuText = computed(() => (theme.value.id === 'memphis-dark' ? '#FFFFFF' :
   pointer-events: none;
   /* Neo-Brutal: harter Schatten, die Formen sind deckend */
   filter: drop-shadow(5px 5px 0 var(--decor-shadow));
+}
+
+.decor-desktop {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .decor-mobile {
+    display: none;
+  }
+
+  .decor-desktop {
+    display: block;
+  }
 }
 
 .content {

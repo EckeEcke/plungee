@@ -80,6 +80,18 @@ export interface CompiledCheckpoint {
   spawn: { x: number; y: number }
 }
 
+export interface CompiledKey {
+  col: number
+  row: number
+  rect: Rect
+}
+
+export interface CompiledDoor {
+  col: number
+  row: number
+  rect: Rect
+}
+
 export interface CompiledLevel {
   data: LevelData
   cols: number
@@ -95,6 +107,8 @@ export interface CompiledLevel {
   spawn: { x: number; y: number }
   goal: Rect
   goalCell: { col: number; row: number }
+  key: CompiledKey | null
+  door: CompiledDoor | null
   checkpoints: CompiledCheckpoint[]
   springs: CompiledSpring[]
   spikes: CompiledSpikes[]
@@ -147,6 +161,8 @@ export function validateLevel(data: LevelData): string[] {
   const solidAt = (c: number, r: number) => data.tiles[r][c] !== '.'
   let spawns = 0
   let goals = 0
+  let keys = 0
+  let doors = 0
   const occupied = new Map<string, string>()
 
   for (const e of data.entities) {
@@ -165,6 +181,14 @@ export function validateLevel(data: LevelData): string[] {
       case 'goal':
         goals++
         if (solidAt(e.x, e.y)) errors.push(`${label}: goal is inside a wall`)
+        break
+      case 'key':
+        keys++
+        if (solidAt(e.x, e.y)) errors.push(`${label}: key is inside a wall`)
+        break
+      case 'door':
+        doors++
+        if (solidAt(e.x, e.y)) errors.push(`${label}: door is inside a wall`)
         break
       case 'checkpoint':
         if (solidAt(e.x, e.y)) errors.push(`${label}: checkpoint is inside a wall`)
@@ -257,6 +281,8 @@ export function validateLevel(data: LevelData): string[] {
 
   if (spawns !== 1) errors.push('Exactly one start point is required')
   if (goals !== 1) errors.push('Exactly one goal is required')
+  if (keys !== doors) errors.push('A level must have exactly one key and one door, or neither')
+  if (keys > 1 || doors > 1) errors.push('A level can have only one key and one door')
   return errors
 }
 
@@ -308,6 +334,8 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
     spawn: { x: -1000, y: -1000 },
     goal: { x: -1000, y: -1000, w: 12, h: 12 },
     goalCell: { col: -100, row: -100 },
+    key: null,
+    door: null,
     checkpoints: [],
     springs: [],
     spikes: [],
@@ -329,6 +357,12 @@ export function compileLevelUnchecked(data: LevelData): CompiledLevel {
       case 'goal':
         level.goal = { x: px + 2, y: py + 2, w: 12, h: 12 }
         level.goalCell = { col: e.x, row: e.y }
+        break
+      case 'key':
+        level.key = { col: e.x, row: e.y, rect: { x: px + 1, y: py + 1, w: 14, h: 14 } }
+        break
+      case 'door':
+        level.door = { col: e.x, row: e.y, rect: { x: px, y: py, w: TILE, h: TILE } }
         break
       case 'checkpoint':
         level.checkpoints.push({

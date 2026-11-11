@@ -55,6 +55,8 @@ const SIZE_LABELS: Record<LevelSize, string> = { short: 'Short', medium: 'Medium
 const ENTITY_LABELS: Record<EntityData['t'], string> = {
   spawn: 'Start',
   goal: 'Goal',
+  key: 'Key',
+  door: 'Door',
   checkpoint: 'Checkpoint',
   spring: 'Spring',
   spikes: 'Spikes',
@@ -81,6 +83,8 @@ const TOOL_HINTS: Record<ToolId, string> = {
   checkpoint: 'Sets a respawn point. Tap again to remove it.',
   spawn: 'Tap to set the start point.',
   goal: 'Tap to set the goal.',
+  key: 'Collect the key before touching the matching door. A level needs both, or neither.',
+  door: 'The door blocks movement until the key is collected. A level needs both, or neither.',
 }
 
 // --- Dokument und Zustand ----------------------------------------------------

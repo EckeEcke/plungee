@@ -6,6 +6,8 @@ export type Dir = 'u' | 'd' | 'l' | 'r'
 export type EntityData =
   | { t: 'spawn'; x: number; y: number }
   | { t: 'goal'; x: number; y: number }
+  | { t: 'key'; x: number; y: number }
+  | { t: 'door'; x: number; y: number }
   | { t: 'checkpoint'; x: number; y: number }
   /** dir = Richtung des Abschusses (u = nach oben, Standard; l/r = seitlich, sitzt an einer Wand) */
   | { t: 'spring'; x: number; y: number; power: 1 | 2; dir?: 'u' | 'l' | 'r' }

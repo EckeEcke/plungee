@@ -351,7 +351,7 @@ export class EditorDoc {
     if (e.t === 'crusher' && !fitCrusher(e, this.rows)) return false
 
     let next = this.entities
-    if (e.t === 'spawn' || e.t === 'goal') next = next.filter((x) => x.t !== e.t)
+    if (e.t === 'spawn' || e.t === 'goal' || e.t === 'key' || e.t === 'door') next = next.filter((x) => x.t !== e.t)
     if (isOverlay(e.t)) {
       next = next.filter((x) => !(x.t === e.t && x.x === e.x && x.y === e.y))
     } else {

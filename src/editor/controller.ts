@@ -428,10 +428,14 @@ export class EditorController {
           ? th.player
           : e.t === 'goal'
             ? th.goal
+            : e.t === 'key'
+              ? th.help2
+              : e.t === 'door'
+                ? th.help2
             : e.t === 'spring' || e.t === 'checkpoint'
               ? th.help
               : th.danger
-      const size = e.t === 'spawn' || e.t === 'goal' ? 4 : 2.5
+      const size = e.t === 'spawn' || e.t === 'goal' || e.t === 'key' || e.t === 'door' ? 4 : 2.5
       ctx.fillRect(e.x * TILE * sx + (TILE * sx - size) / 2, e.y * TILE * sy + (TILE * sy - size) / 2, size, size)
     }
 
