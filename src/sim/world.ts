@@ -15,6 +15,7 @@ import {
   CRUMBLE_DELAY,
   CRUMBLE_REGROW,
   ICE_ACCEL,
+  ICE_MOMENTUM_DRAG,
   SPRING_SIDE_LIFT,
   SPRING_SIDE_POWER,
   SPRING_SIDE_STUN,
@@ -55,6 +56,7 @@ export type SimEvent =
   | { type: 'doorOpen' }
   /** Eine brüchige Plattform beginnt zu zerbröckeln (einmal pro Betreten) */
   | { type: 'crumble' }
+  | { type: 'brittleBreak'; x: number; y: number; fromBelow: boolean; side?: -1 | 1 }
   | { type: 'finish'; ticks: number }
   | { type: 'fallingSpikeBreak'; x: number; y: number }
   | { type: 'fallingSpikeWarn' }
@@ -105,6 +107,9 @@ export class World {
   onEvent: ((e: SimEvent) => void) | null = null
   /** Pro Zelle: Tick, an dem eine brüchige Plattform betreten wurde (-1 = unberührt) */
   crumble: Int32Array
+  /** Blocks shattered from below; crumble stores their impact tick. */
+  shattered: Uint8Array
+  private boostAscent = false
   /** Block-Typ unter den Füßen im letzten Tick (siehe tiles.ts), 0 = normal */
   surface = 0
   /** Index der beweglichen Plattform, auf der der Spieler steht (-1 = keine) */
@@ -143,6 +148,7 @@ export class World {
     this.prevX = this.p.x
     this.prevY = this.p.y
     this.crumble = new Int32Array(level.cols * level.rows).fill(-1)
+    this.shattered = new Uint8Array(level.cols * level.rows)
     this.syncCrushers()
     this.resetFallingSpikes()
   }
@@ -161,6 +167,8 @@ export class World {
     w.respawnX = this.respawnX
     w.respawnY = this.respawnY
     w.crumble = this.crumble.slice()
+    w.shattered = this.shattered.slice()
+    w.boostAscent = this.boostAscent
     w.surface = this.surface
     w.riding = this.riding
     w.ridingCrusher = this.ridingCrusher
@@ -200,8 +208,14 @@ export class World {
       p.vx *= STUN_DAMP
     } else {
       const onIce = p.onGround && this.surface === K_ICE
-      const acc = (p.onGround ? (onIce ? ICE_ACCEL : ACCEL_GROUND) : ACCEL_AIR) * DT
+      let acc = (p.onGround ? (onIce ? ICE_ACCEL : ACCEL_GROUND) : ACCEL_AIR) * DT
       let target = input * MOVE_SPEED
+      // Keep excess momentum on ice, including the flight off its edge.
+      if (Math.abs(p.vx) > MOVE_SPEED && (onIce || !p.onGround)) {
+        if (input === Math.sign(p.vx)) target = p.vx
+        else if (input === 0) acc = ICE_MOMENTUM_DRAG * DT
+        else acc = ICE_ACCEL * DT
+      }
       if (p.onGround) {
         if (this.surface === K_BELT_L) target -= BELT_SPEED
         else if (this.surface === K_BELT_R) target += BELT_SPEED
@@ -247,7 +261,9 @@ export class World {
     this.climbing = p.stun === 0 && !this.ceilingBelt && this.climberBeside(input) ? input : 0
     if (this.climbing && this.climbing !== previousClimb) this.emit({ type: 'climberAttach', direction: this.climbing })
     if (this.climbing) p.vy = -BELT_SPEED
+    if (p.vy >= 0 || this.climbing || this.ceilingBelt) this.boostAscent = false
     this.moveY(p.vy * DT, input)
+    if (p.vy >= 0) this.boostAscent = false
     if (p.dead) { this.tick++; return }
     this.landOnMovers(bottomBefore)
     this.ridingCrusher = this.crusherUnderfoot()
@@ -255,6 +271,11 @@ export class World {
       this.emit({ type: 'land', strength: impact })
     }
     this.touchGround()
+    for (const i of this.level.brittle) {
+      if (!this.shattered[i] && this.crumble[i] >= 0 && this.tick + 1 - this.crumble[i] === CRUMBLE_DELAY) {
+        this.emit({ type: 'brittleBreak', x: (i % this.level.cols + 0.5) * TILE, y: (Math.floor(i / this.level.cols) + 0.5) * TILE, fromBelow: false })
+      }
+    }
 
     // Gefahren und Interaktionen werden mit der Pose zum Ende dieses Ticks geprüft.
     this.tick++
@@ -273,6 +294,8 @@ export class World {
     p.dead = false
     p.deadTimer = 0
     this.crumble.fill(-1)
+    this.shattered.fill(0)
+    this.boostAscent = false
     this.resetFallingSpikes()
     this.surface = 0
     this.riding = -1
@@ -377,6 +400,7 @@ export class World {
         -HAMMER_MAX_KB,
         HAMMER_MAX_KB,
       )
+      this.boostAscent = p.vy < 0
       p.stun = HAMMER_STUN_TICKS
       p.hitCooldown = HAMMER_HIT_COOLDOWN
       p.onGround = false
@@ -390,7 +414,9 @@ export class World {
       if (sp.dir === 'u') {
         if (p.vy < 0) continue
         p.vy = -SPRING_POWER[sp.power - 1]
+        this.boostAscent = true
       } else {
+        this.boostAscent = false
         // Seitenfeder: nur auslösen, wenn man in sie hineinläuft oder an ihr steht
         if (sp.dir === 'r' ? p.vx > 0 : p.vx < 0) continue
         p.vx = (sp.dir === 'r' ? 1 : -1) * SPRING_SIDE_POWER[sp.power - 1]
@@ -446,7 +472,7 @@ export class World {
     const i = row * lv.cols + col
     const k = lv.kind[i]
     if (isBlinkKind(k)) return blinkSolid(k, this.tick + 1)
-    if (k === K_BRITTLE) return !(this.crumble[i] >= 0 && this.tick + 1 - this.crumble[i] >= CRUMBLE_DELAY)
+    if (k === K_BRITTLE) return !(this.shattered[i] || (this.crumble[i] >= 0 && this.tick + 1 - this.crumble[i] >= CRUMBLE_DELAY))
     return lv.solid[i] === 1 || k === K_ONEWAY
   }
 
@@ -591,7 +617,7 @@ export class World {
   laserBeam(laser: CompiledLaser, tick = this.tick, movementTick = tick): Rect | null {
     const alpha = clamp(movementTick - this.tick + 1, 0, 1)
     const spikes = this.fallingSpikes.filter(s => s.phase !== 'gone').map(s => ({ x: s.x, y: s.prevY + (s.y - s.prevY) * alpha }))
-    return laserBeam(this.level, laser, tick, this.crumble, movementTick, spikes)
+    return laserBeam(this.level, laser, tick, this.crumble, movementTick, spikes, this.shattered)
   }
 
   private isSolid(col: number, row: number): boolean {
@@ -703,14 +729,14 @@ export class World {
   /** Brüchige Plattform ist zerbrochen, solange sie nicht wieder nachgewachsen ist */
   private isBroken(i: number): boolean {
     const t = this.crumble[i]
-    return t >= 0 && this.tick - t >= CRUMBLE_DELAY
+    return !!this.shattered[i] || (t >= 0 && this.tick - t >= CRUMBLE_DELAY)
   }
 
   /** Zustand einer brüchigen Zelle für die Darstellung */
   brittleInfo(col: number, row: number): { state: 'ok' | 'crack' | 'gone'; progress: number } {
     const t = this.crumble[row * this.level.cols + col]
     if (t < 0) return { state: 'ok', progress: 0 }
-    const el = this.tick - t
+    const el = this.tick - t + (this.shattered[row * this.level.cols + col] ? CRUMBLE_DELAY : 0)
     if (el < CRUMBLE_DELAY) return { state: 'crack', progress: el / CRUMBLE_DELAY }
     return { state: 'gone', progress: Math.min(1, (el - CRUMBLE_DELAY) / CRUMBLE_REGROW) }
   }
@@ -720,11 +746,12 @@ export class World {
     const lv = this.level
     for (const i of lv.brittle) {
       const t = this.crumble[i]
-      if (t < 0 || this.tick - t < CRUMBLE_DELAY + CRUMBLE_REGROW) continue
+      if (t < 0 || this.tick - t < (this.shattered[i] ? 0 : CRUMBLE_DELAY) + CRUMBLE_REGROW) continue
       const x = (i % lv.cols) * TILE
       const y = Math.floor(i / lv.cols) * TILE
       if (overlaps(this.p.x, this.p.y, { x, y, w: TILE, h: TILE })) continue
       this.crumble[i] = -1
+      this.shattered[i] = 0
     }
   }
 
@@ -753,6 +780,20 @@ export class World {
     if (crumbled) this.emit({ type: 'crumble' })
   }
 
+  private breakSideBlocks(col: number, top: number, bottom: number): void {
+    if (Math.abs(this.p.vx) <= MOVE_SPEED || col < 0 || col >= this.level.cols) return
+    let broke = false
+    for (let row = Math.max(0, top); row <= Math.min(this.level.rows - 1, bottom); row++) {
+      const i = row * this.level.cols + col
+      if (this.level.kind[i] !== K_BRITTLE || this.isBroken(i)) continue
+      this.crumble[i] = this.tick
+      this.shattered[i] = 1
+      this.emit({ type: 'brittleBreak', x: (col + 0.5) * TILE, y: (row + 0.5) * TILE, fromBelow: false, side: this.p.vx > 0 ? 1 : -1 })
+      broke = true
+    }
+    if (broke) this.emit({ type: 'crumble' })
+  }
+
   private moveX(dx: number): void {
     const p = this.p
     let remaining = dx
@@ -773,6 +814,7 @@ export class World {
       const bottom = Math.floor((p.y + PLAYER_H - EPS) / TILE)
       if (step > 0) {
         const c = Math.floor((p.x + PLAYER_W - EPS) / TILE)
+        if (!blocked && p.vx > MOVE_SPEED && before + PLAYER_W <= c * TILE + EPS) this.breakSideBlocks(c, top, bottom)
         // Tor nach links offen: von links kommend ist es dicht
         if (this.solidInRows(c, top, bottom) || this.doorInRows(c, top, bottom) || this.gateInRows(c, top, bottom, K_GATE_L, before + PLAYER_W <= c * TILE + EPS)) {
           p.x = c * TILE - PLAYER_W
@@ -781,6 +823,7 @@ export class World {
         }
       } else {
         const c = Math.floor(p.x / TILE)
+        if (!blocked && p.vx < -MOVE_SPEED && before >= (c + 1) * TILE - EPS) this.breakSideBlocks(c, top, bottom)
         // Tor nach rechts offen: von rechts kommend ist es dicht
         if (this.solidInRows(c, top, bottom) || this.doorInRows(c, top, bottom) || this.gateInRows(c, top, bottom, K_GATE_R, before >= (c + 1) * TILE - EPS)) {
           p.x = (c + 1) * TILE
@@ -822,6 +865,19 @@ export class World {
         }
       } else {
         const r = Math.floor(p.y / TILE)
+        if (this.boostAscent && !blocked && r >= 0 && r < this.level.rows && beforeY >= (r + 1) * TILE - EPS) {
+          let broke = false
+          for (let c = Math.max(0, left); c <= Math.min(this.level.cols - 1, right); c++) {
+            const i = r * this.level.cols + c
+            if (this.level.kind[i] === K_BRITTLE && !this.isBroken(i)) {
+              this.crumble[i] = this.tick
+              this.shattered[i] = 1
+              this.emit({ type: 'brittleBreak', x: (c + 0.5) * TILE, y: (r + 0.5) * TILE, fromBelow: true })
+              broke = true
+            }
+          }
+          if (broke) this.emit({ type: 'crumble' })
+        }
         // Tor nach unten offen: von unten kommend ist es dicht
         if (this.solidInCols(r, left, right) || this.doorInCols(r, left, right) || this.gateInCols(r, left, right, K_GATE_D, beforeY >= (r + 1) * TILE - EPS)) {
           p.y = (r + 1) * TILE

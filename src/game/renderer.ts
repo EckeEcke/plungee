@@ -242,6 +242,18 @@ export class Renderer {
         })
         this.shake = Math.max(this.shake, 5)
         break
+      case 'brittleBreak':
+        this.particles.burst(e.x, e.y, 9, {
+          colors: [th.brittle, th.brittleTop, th.brittleShade],
+          speed: 65,
+          life: 0.35,
+          size: 1.5,
+          gravity: 210,
+          shape: 'square',
+          angle: e.side ? (e.side > 0 ? 0 : Math.PI) : e.fromBelow ? -Math.PI / 2 : Math.PI / 2,
+          spread: Math.PI * 1.2,
+        })
+        break
       case 'fallingSpikeBreak':
         this.particles.burst(e.x, e.y, 7, { colors: [th.danger, th.dangerDark, th.solidTop], speed: 65, life: 0.3, size: 1.6, gravity: 180, shape: 'square' })
         break

@@ -43,6 +43,8 @@ export const HAMMER_STUN_TICKS = 14
 export const HAMMER_HIT_COOLDOWN = 20
 // Block-Typen
 export const ICE_ACCEL = 240
+/** Passive loss of excess momentum on ice and after leaving its edge. */
+export const ICE_MOMENTUM_DRAG = 45
 export const BELT_SPEED = 60
 /** Ticks vom ersten Betreten bis die brüchige Plattform verschwindet */
 export const CRUMBLE_DELAY = 30

@@ -236,3 +236,150 @@ describe('Block-Typen im Editor', () => {
     expect(new EditorDoc(data).toLevelData().tiles).toEqual(data.tiles)
   })
 })
+
+describe('Spring brittle breakthrough', () => {
+  const make = (power: 1 | 2, kind: TileChar = 'B') => new World(compileLevel(
+    new LevelBuilder('short').plat(12, 0, 15).plat(9, 7, 7, kind)
+      .spring(7, 11, power).spawn(7, 10).goal(0, 0).build(),
+  ))
+
+  it.each([1, 2] as const)('shatters immediately and preserves ascent with spring power %i', power => {
+    const w = make(power)
+    let events = 0
+    w.onEvent = e => { if (e.type === 'crumble') events++ }
+    for (let i = 0; i < 60 && w.brittleInfo(7, 9).state !== 'gone'; i++) w.step(0)
+    expect(w.brittleInfo(7, 9).state).toBe('gone')
+    expect(w.tick).toBeLessThan(CRUMBLE_DELAY)
+    expect(w.p.vy).toBeLessThan(0)
+    expect(w.p.y).toBeLessThan(10 * TILE)
+    expect(events).toBe(1)
+    const clone = w.clone()
+    expect(clone.brittleInfo(7, 9)).toEqual(w.brittleInfo(7, 9))
+    w.p.x = 2 * TILE
+    w.p.y = 12 * TILE - PLAYER_H
+    w.p.vy = 0
+    run(w, 0, CRUMBLE_REGROW + 1)
+    expect(w.brittleInfo(7, 9).state).toBe('ok')
+  })
+
+  it('keeps solid ceilings intact', () => {
+    const w = make(2, '#')
+    run(w, 0, 20)
+    expect(w.p.y).toBeGreaterThanOrEqual(10 * TILE)
+  })
+
+  it('does not shatter brittle blocks without a spring launch', () => {
+    const w = make(1)
+    w.p.y = 10 * TILE + 1
+    w.p.vy = -380
+    w.step(0)
+    expect(w.brittleInfo(7, 9).state).toBe('ok')
+    expect(w.p.vy).toBe(0)
+  })
+})
+
+
+describe('Side spring brittle breakthrough', () => {
+  const make = (dir: 'l' | 'r', power: 1 | 2, kind: TileChar = 'B') => {
+    const col = dir === 'r' ? 9 : 5
+    const w = new World(compileLevel(new LevelBuilder('short').plat(11, 0, 15)
+      .wall(col, 6, 10, kind).spring(7, 10, power, dir).spawn(7, 9).goal(0, 0).build()))
+    return { w, col, sign: dir === 'r' ? 1 : -1 }
+  }
+
+  for (const dir of ['l', 'r'] as const) {
+    it.each([1, 2] as const)(dir + ' spring breaks walls with power %i and preserves momentum', power => {
+      const { w, col, sign } = make(dir, power)
+      let breaks = 0
+      w.onEvent = e => { if (e.type === 'brittleBreak' && e.side === sign) breaks++ }
+      for (let i = 0; i < 50 && breaks === 0; i++) w.step(0)
+      expect(breaks).toBeGreaterThan(0)
+      expect(w.p.vx * sign).toBeGreaterThan(110)
+      const clone = w.clone()
+      for (let i = 0; i < 4; i++) { w.step(0); clone.step(0) }
+      expect(clone.p).toEqual(w.p)
+      expect([...clone.shattered]).toEqual([...w.shattered])
+      expect(Array.from({ length: 5 }, (_, i) => w.brittleInfo(col, i + 6).state)).toContain('gone')
+    })
+
+    it(dir + ' spring cannot break a solid wall', () => {
+      const { w } = make(dir, 2, '#')
+      run(w, 0, 40)
+      expect([...w.shattered].some(Boolean)).toBe(false)
+    })
+  }
+
+  it('running into brittle walls does not break them', () => {
+    const w = new World(compileLevel(new LevelBuilder('short').plat(11, 0, 15)
+      .wall(9, 6, 10, 'B').spawn(7, 10).goal(0, 0).build()))
+    run(w, 1, 60)
+    expect([...w.shattered].some(Boolean)).toBe(false)
+  })
+})
+
+
+describe('Side spring momentum on ice', () => {
+  function landed(kind: TileChar = 'I'): World {
+    const w = new World(compileLevel(new LevelBuilder('short').plat(12, 0, 15, kind)
+      .spring(2, 11, 2, 'r').spawn(2, 10).goal(0, 0).build()))
+    let launched = false
+    w.onEvent = e => { if (e.type === 'spring') launched = true }
+    for (let i = 0; i < 60; i++) {
+      w.step(0)
+      if (launched && w.p.onGround && w.p.stun === 0) return w
+    }
+    throw new Error('Spring launch did not land')
+  }
+
+  it('coasts much longer than on normal ground', () => {
+    const ice = landed(), solid = landed('#')
+    const before = ice.p.vx
+    run(ice, 0, 5)
+    run(solid, 0, 5)
+    expect(ice.p.vx).toBeGreaterThan(before - 5)
+    expect(ice.p.vx).toBeGreaterThan(solid.p.vx + 80)
+  })
+
+  it('preserves speed with matching input without accelerating', () => {
+    const w = landed()
+    const before = w.p.vx
+    run(w, 1, 5)
+    expect(w.p.vx).toBeCloseTo(before)
+  })
+
+  it('countersteering brakes more strongly than coasting', () => {
+    const w = landed(), coast = w.clone()
+    run(w, -1, 5)
+    run(coast, 0, 5)
+    expect(w.p.vx).toBeLessThan(coast.p.vx - 10)
+    expect(w.p.vx).toBeGreaterThan(0)
+  })
+
+  it('keeps momentum in the air after leaving ice', () => {
+    const w = landed()
+    const before = w.p.vx
+    w.p.onGround = false
+    w.p.y -= TILE * 2
+    run(w, 0, 5)
+    expect(w.p.vx).toBeGreaterThan(before - 5)
+  })
+})
+
+
+describe('Brittle breakthrough from any fast impact', () => {
+  it.each([-1, 1] as const)('preserves non-spring momentum on ice and breaks walls in direction %i', dir => {
+    const col = dir > 0 ? 10 : 4
+    const w = new World(compileLevel(new LevelBuilder('short').plat(12, 0, 15, 'I')
+      .wall(col, 8, 11, 'B').spawn(7, 11).goal(0, 0).build()))
+    run(w, 0, 3)
+    w.p.vx = dir * 300
+    const coast = w.clone()
+    run(coast, 0, 5)
+    expect(coast.p.vx * dir).toBeGreaterThan(290)
+    let broke = false
+    w.onEvent = e => { if (e.type === 'brittleBreak') broke = true }
+    for (let i = 0; i < 30 && !broke; i++) w.step(0)
+    expect(broke).toBe(true)
+    expect(w.p.vx * dir).toBeGreaterThan(110)
+  })
+})

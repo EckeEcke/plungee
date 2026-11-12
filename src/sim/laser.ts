@@ -6,7 +6,7 @@ import type { Rect } from './types'
 import { fallingSpikeBottom } from './fallingSpike'
 
 /** Current beam, shared by rendering and simulation. Never mutate the compiled level. */
-export function laserBeam(level: CompiledLevel, laser: CompiledLaser, tick: number, crumble: Int32Array, movementTick = tick, fallingSpikes: ReadonlyArray<{ x: number; y: number }> = []): Rect | null {
+export function laserBeam(level: CompiledLevel, laser: CompiledLaser, tick: number, crumble: Int32Array, movementTick = tick, fallingSpikes: ReadonlyArray<{ x: number; y: number }> = [], shattered?: Uint8Array): Rect | null {
   const vertical = laser.dir === 'u' || laser.dir === 'd'
   const positive = laser.dir === 'd' || laser.dir === 'r'
   const dc = vertical ? 0 : positive ? 1 : -1
@@ -33,7 +33,7 @@ export function laserBeam(level: CompiledLevel, laser: CompiledLaser, tick: numb
     const kind = level.kind[i]
     let solid = level.solid[i] === 1
     if (isBlinkKind(kind)) solid = blinkSolid(kind, tick)
-    else if (kind === K_BRITTLE) solid = !(crumble[i] >= 0 && tick - crumble[i] >= CRUMBLE_DELAY)
+    else if (kind === K_BRITTLE) solid = !(shattered?.[i] || (crumble[i] >= 0 && tick - crumble[i] >= CRUMBLE_DELAY))
     else if (kind === K_ONEWAY) solid = laser.dir === 'd'
     else if (kind === K_GATE_D) solid = laser.dir === 'u'
     else if (kind === K_GATE_L) solid = laser.dir === 'r'
