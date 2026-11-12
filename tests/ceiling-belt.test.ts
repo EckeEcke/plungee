@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 import type { InputDir } from '../src/sim'
 import type { Particles } from '../src/game/particles'
-const { World, LevelBuilder, compileLevel, TILE, BELT_SPEED, simulate, encodeInputs, decodeInputs } = await import('../src/sim/index')
+const { World, LevelBuilder, compileLevel, TILE, BELT_SPEED, MOVE_SPEED, simulate, encodeInputs, decodeInputs } = await import('../src/sim/index')
 const { Renderer } = await import('../src/game/renderer')
 const { MEMPHIS_DARK } = await import('../src/game/theme')
 const { beltPose } = await import('../src/game/beltPose')
@@ -106,3 +106,20 @@ test('docking emits one small themed particle burst at the head, not continuousl
   assert.equal(options.shape, 'star')
   assert.ok(options.life !== undefined && options.life <= 0.3)
 })
+
+
+for (const dir of [-1, 1] as const) {
+  test('belt ' + dir + ': caps directional speed and returns to belt speed without input', () => {
+    const w = fixture(dir)
+    w.step(0)
+    for (let i = 0; i < 15; i++) {
+      w.step(dir)
+      assert.equal(w.ceilingBelt, dir)
+      assert.ok(w.p.vx * dir <= MOVE_SPEED + BELT_SPEED)
+    }
+    assert.equal(w.p.vx, dir * (MOVE_SPEED + BELT_SPEED))
+    for (let i = 0; i < 8; i++) w.step(0)
+    assert.equal(w.ceilingBelt, dir)
+    assert.equal(w.p.vx, dir * BELT_SPEED)
+  })
+}

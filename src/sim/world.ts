@@ -211,7 +211,7 @@ export class World {
       let acc = (p.onGround ? (onIce ? ICE_ACCEL : ACCEL_GROUND) : ACCEL_AIR) * DT
       let target = input * MOVE_SPEED
       // Keep excess momentum on ice, including the flight off its edge.
-      if (Math.abs(p.vx) > MOVE_SPEED && (onIce || !p.onGround)) {
+      if (!this.ceilingBelt && Math.abs(p.vx) > MOVE_SPEED && (onIce || !p.onGround)) {
         if (input === Math.sign(p.vx)) target = p.vx
         else if (input === 0) acc = ICE_MOMENTUM_DRAG * DT
         else acc = ICE_ACCEL * DT
