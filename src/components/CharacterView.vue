@@ -1,18 +1,8 @@
-
 <script setup lang="ts">
 import PageShell from './PageShell.vue'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { themeById, type Theme } from '../game/theme'
-import {
-  applyLook,
-  COLORS,
-  DEFAULT_LOOK,
-  EYES,
-  look,
-  PATTERN_COLORS,
-  PATTERNS,
-  randomLook,
-} from '../game/look'
+import { applyLook, COLORS, DEFAULT_LOOK, EYES, look, PATTERN_COLORS, PATTERNS, randomLook } from '../game/look'
 import CharacterCanvas from './CharacterCanvas.vue'
 import { loadName, nameProblem, saveName } from '../online/api'
 
@@ -33,29 +23,34 @@ function onNameInput(event: Event): void {
 }
 
 /**
- * Die Farbfelder verwenden das Basis-Theme, damit sie unabhängig
- * von der aktuell gewählten Körperfarbe korrekt dargestellt werden.
+ * props.theme enthält die gewählte Körperfarbe schon (App.vue wendet sie an). Die Farbfelder brauchen aber
+ * das Theme ohne Auswahl, sonst zeigt „Pink“ immer die aktuell gewählte Farbe und setzt beim Klick auf Pink zurück.
  */
 const base = computed(() => themeById(props.theme.id))
 
-/** Vorschau mit der aktuell gewählten Farbe und dem Look. */
+/** Vorschau: Basis-Theme mit der gewählten Farbe, genau wie im Spiel */
 const themed = computed(() => applyLook(base.value, look))
 
+const previewSize = ref(96)
+function resizePreviews(): void {
+  previewSize.value = window.innerWidth >= 800 && window.innerHeight >= 500 ? 168 : 96
+}
+onMounted(() => {
+  resizePreviews()
+  window.addEventListener('resize', resizePreviews)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', resizePreviews))
+
 function swatch(id: string): { background: string } {
-  const c = COLORS.find(o => o.id === id)!
+  const c = COLORS.find((o) => o.id === id)!
   const body = c.body ?? base.value.player
   const shade = c.shade ?? base.value.playerShade
-
-  return {
-    background: `linear-gradient(180deg, ${body} 65%, ${shade} 65%)`,
-  }
+  return { background: `linear-gradient(180deg, ${body} 65%, ${shade} 65%)` }
 }
 
-/** Die Musterfarbe "Dark" folgt der Konturfarbe des Themes. */
+/** Farbfeld für die Musterfarbe; „Dark“ folgt der Konturfarbe des Themes */
 function patternSwatch(hex: string | null): { background: string } {
-  return {
-    background: hex ?? base.value.outline,
-  }
+  return { background: hex ?? base.value.outline }
 }
 
 function reset(): void {
@@ -65,31 +60,22 @@ function reset(): void {
 function randomize(): void {
   Object.assign(look, randomLook(Math.random, { ...look }))
 }
+
 </script>
 
 <template>
   <PageShell :theme="theme">
-    <div class="chr-page">
-      <header class="top">
-        <button
-          class="ib"
-          type="button"
-          aria-label="Back to menu"
-          @click="emit('exit')"
-        >
-          ←
-        </button>
+  <div class="chr-page">
+    <header class="top">
+      <button class="ib" type="button" aria-label="Back to menu" @click="emit('exit')">←</button>
+      <div class="title">
+        <b>Character</b>
+        <small>Make it yours</small>
+      </div>
+    </header>
 
-        <div class="title">
-          <b>Character</b>
-          <small>Make it yours</small>
-        </div>
-      </header>
-
-      <div class="scroll">
-        <div class="col">
-          <!-- Player name -->
-
+    <div class="scroll">
+      <div class="col">
           <section class="name-panel">
             <label class="player-name">
               <span>PLAYER NAME</span>
@@ -113,9 +99,9 @@ function randomize(): void {
             </p>
           </section>
 
-          <!-- Character preview -->
 
-          <section class="stage">
+        <section class="stage">
+          <div class="preview-tools">
           <button class="preview-action randomize" type="button" aria-label="Randomize" title="Randomize" @click="randomize">
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8">
               <rect x="3" y="3" width="18" height="18" rx="4" />
@@ -133,124 +119,103 @@ function randomize(): void {
               <path d="M4 10a8 8 0 1 1 1.5 7M4 4v6h6" />
             </svg>
           </button>
-            <div class="character-preview">
-              <CharacterCanvas
-                :colors="themed"
-                :look="look"
-                :size="168"
-              />
-            </div>
-          </section>
+          </div>
+          <div class="character-preview">
+            <CharacterCanvas :colors="themed" :look="look" :size="previewSize" />
+          </div>
+        </section>
 
-          <!-- Character options -->
+        <section class="opts">
+          <h3>Color</h3>
+          <div class="swatches" role="radiogroup" aria-label="Color">
+            <button
+              v-for="c in COLORS"
+              :key="c.id"
+              type="button"
+              role="radio"
+              class="sw"
+              :class="{ on: look.color === c.id }"
+              :aria-checked="look.color === c.id"
+              :aria-label="c.label"
+              :title="c.label"
+              :style="swatch(c.id)"
+              @click="look.color = c.id"
+            />
+          </div>
 
-          <section class="opts">
-            <h3>Color</h3>
-
-            <div
-              class="swatches"
-              role="radiogroup"
-              aria-label="Color"
+          <h3>Eyes</h3>
+          <div class="choices" role="radiogroup" aria-label="Eyes">
+            <button
+              v-for="o in EYES"
+              :key="o.id"
+              type="button"
+              role="radio"
+              :class="{ on: look.eyes === o.id }"
+              class="choice"
+              :aria-label="o.label"
+              :aria-checked="look.eyes === o.id"
+              @click="look.eyes = o.id"
             >
-              <button
-                v-for="c in COLORS"
-                :key="c.id"
-                type="button"
-                role="radio"
-                class="sw"
-                :class="{ on: look.color === c.id }"
-                :aria-checked="look.color === c.id"
-                :aria-label="c.label"
-                :title="c.label"
-                :style="swatch(c.id)"
-                @click="look.color = c.id"
-              />
-            </div>
+              <CharacterCanvas :colors="themed" :look="{ ...look, eyes: o.id, pattern: 'none' }" :size="56" :animate="false" />
+              <span>{{ o.label }}</span>
+            </button>
+          </div>
 
-            <h3>Eyes</h3>
-
-            <div
-              class="chips"
-              role="radiogroup"
-              aria-label="Eyes"
+          <h3>Pattern</h3>
+          <div class="choices" role="radiogroup" aria-label="Pattern">
+            <button
+              v-for="o in PATTERNS"
+              :key="o.id"
+              type="button"
+              role="radio"
+              :class="{ on: look.pattern === o.id }"
+              class="choice"
+              :aria-label="o.label"
+              :aria-checked="look.pattern === o.id"
+              @click="look.pattern = o.id"
             >
-              <button
-                v-for="o in EYES"
-                :key="o.id"
-                type="button"
-                role="radio"
-                :class="{ on: look.eyes === o.id }"
-                :aria-checked="look.eyes === o.id"
-                @click="look.eyes = o.id"
-              >
-                {{ o.label }}
-              </button>
-            </div>
+              <CharacterCanvas :colors="themed" :look="{ ...look, pattern: o.id }" :size="56" :animate="false" />
+              <span>{{ o.label }}</span>
+            </button>
+          </div>
 
-            <h3>Pattern</h3>
+          <h3 :class="{ disabled: look.pattern === 'none' }">Pattern color</h3>
+          <div
+            class="swatches pattern-swatches"
+            role="radiogroup"
+            aria-label="Pattern color"
+            :aria-disabled="look.pattern === 'none'"
+          >
+            <button
+              v-for="c in PATTERN_COLORS"
+              :key="c.id"
+              type="button"
+              role="radio"
+              class="sw"
+              :class="{ on: look.patternColor === c.id }"
+              :aria-checked="look.patternColor === c.id"
+              :aria-label="c.label"
+              :title="c.label"
+              :style="patternSwatch(c.hex)"
+              :disabled="look.pattern === 'none'"
+              @click="look.patternColor = c.id"
+            />
+          </div>
+        </section>
 
-            <div
-              class="chips"
-              role="radiogroup"
-              aria-label="Pattern"
-            >
-              <button
-                v-for="o in PATTERNS"
-                :key="o.id"
-                type="button"
-                role="radio"
-                :class="{ on: look.pattern === o.id }"
-                :aria-checked="look.pattern === o.id"
-                @click="look.pattern = o.id"
-              >
-                {{ o.label }}
-              </button>
-            </div>
-
-            <h3 :class="{ disabled: look.pattern === 'none' }">
-              Pattern color
-            </h3>
-
-            <div
-              class="swatches"
-              role="radiogroup"
-              aria-label="Pattern color"
-              :aria-disabled="look.pattern === 'none'"
-            >
-              <button
-                v-for="c in PATTERN_COLORS"
-                :key="c.id"
-                type="button"
-                role="radio"
-                class="sw"
-                :class="{ on: look.patternColor === c.id }"
-                :aria-checked="look.patternColor === c.id"
-                :aria-label="c.label"
-                :title="c.label"
-                :style="patternSwatch(c.hex)"
-                :disabled="look.pattern === 'none'"
-                @click="look.patternColor = c.id"
-              />
-            </div>
-          </section>
-
-        </div>
       </div>
     </div>
+  </div>
   </PageShell>
 </template>
 
 <style scoped>
-/* Layout */
-
 .chr-page {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
-
-/* Header */
 
 .top {
   display: flex;
@@ -262,8 +227,8 @@ function randomize(): void {
 }
 
 .ib {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   font-size: 20px;
   font-weight: 900;
   color: var(--text);
@@ -286,8 +251,6 @@ function randomize(): void {
   color: var(--muted);
 }
 
-/* Scroll container */
-
 .scroll {
   flex: 1;
   min-height: 0;
@@ -296,25 +259,23 @@ function randomize(): void {
 }
 
 .col {
-  width: min(100%, 520px);
+  width: min(100%, 960px);
   margin: 0 auto;
   display: grid;
   gap: 14px;
 }
 
-/* Panels */
-
 .name-panel,
 .stage,
 .opts {
-  padding: 14px 16px;
   background: var(--panel);
   border: 3px solid var(--line);
   border-radius: 20px;
   box-shadow: 4px 4px 0 var(--outline);
+  padding: 14px 16px;
 }
 
-/* Player name */
+.name-panel { grid-column: 1 / -1; }
 
 .player-name {
   display: grid;
@@ -346,20 +307,24 @@ function randomize(): void {
   color: var(--accent);
 }
 
-/* Character preview */
 
 .stage {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  align-self: start;
+  background: var(--bg1);
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
   justify-items: center;
+  gap: 6px 10px;
+  padding: 10px;
 }
 
-.character-preview {
-  width: 168px;
-  height: 168px;
-}
-
-/* Option headings */
+.preview-tools { grid-column: 2; grid-row: 1; align-self: start; display: flex; flex-direction: column; gap: 6px; }
+.character-preview { grid-column: 1; grid-row: 1; }
+.opts { min-width: 0; }
 
 h3 {
   margin: 14px 0 8px;
@@ -374,21 +339,20 @@ h3:first-child {
   margin-top: 0;
 }
 
-h3.disabled {
-  opacity: 0.35;
-}
-
-/* Color swatches */
-
 .swatches {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
+/* Immer sichtbar, auch bei "None"; die Buttons sind dann disabled. */
+.pattern-swatches {
+  min-height: 40px;
+}
+
 .sw {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   cursor: pointer;
   border: 3px solid var(--line);
   border-radius: 12px;
@@ -399,42 +363,43 @@ h3.disabled {
   outline-offset: 2px;
 }
 
-.sw:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* Eye and pattern selection */
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 8px;
 }
 
-.chips button {
+.choice {
+  min-width: 0;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   cursor: pointer;
   font: inherit;
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 800;
-  padding: 7px 14px;
+  padding: 6px 4px;
   color: var(--text);
   background: transparent;
   border: 2px solid var(--line);
-  border-radius: 999px;
+  border-radius: 12px;
 }
 
-.chips button.on {
-  color: var(--outline);
-  background: var(--accent);
-  border-color: var(--outline);
+.choice span { min-height: 28px; display: grid; place-items: center; text-align: center; overflow-wrap: anywhere; }
+
+.choice.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* Actions */
+.choice:focus-visible, .sw:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
 .preview-action {
-  position: absolute;
-  top: 8px;
+  flex: none;
   display: grid;
   place-items: center;
   width: 44px;
@@ -446,30 +411,18 @@ h3.disabled {
   border: 2px solid var(--line);
   border-radius: 12px;
 }
-.preview-action.randomize { right: 8px; }
-.preview-action.reset { right: 8px; top: 60px; }
 .preview-action svg { width: 22px; height: 22px; }
 .preview-action:hover { background: var(--accent); color: var(--outline); }
 .preview-action:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+h3.disabled { opacity: 0.35; }
+.sw:disabled { opacity: 0.55; cursor: not-allowed; }
+@media (min-width: 800px) {
+  .col { grid-template-columns: 250px minmax(0, 1fr); align-items: start; }
+}
 
-/* Mobile: compact sticky preview */
-
-@media (max-width: 599px) {
-  .stage {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    padding: 10px 16px;
-  }
-
-  .character-preview {
-    width: 96px;
-    height: 96px;
-  }
-
-  .character-preview :deep(canvas) {
-    transform: scale(0.57142857);
-    transform-origin: top left;
-  }
+@media (min-width: 800px) and (min-height: 500px) {
+  .stage { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; gap: 12px; }
+  .preview-tools { grid-column: 1; grid-row: 1; flex-direction: row; justify-self: end; }
+  .character-preview { grid-column: 1; grid-row: 2; }
 }
 </style>

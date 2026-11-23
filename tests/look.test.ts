@@ -25,7 +25,7 @@ describe('Aussehen der Figur: Daten', () => {
   })
 
   it('es gibt fünf Augenformen, darunter die mit Wimpern', () => {
-    expect(EYES.map((e) => e.id)).toEqual(['round', 'big', 'focus', 'small', 'googly', 'sleepy', 'lashes'])
+    expect(EYES.map((e) => e.id)).toEqual(['round', 'big', 'focus', 'small', 'googly', 'sleepy', 'lashes', 'pin', 'button', 'cross-eyed', 'skeptical'])
   })
 
   it('es gibt fünf Muster plus "kein Muster", die Musterfarben sind eindeutig und ohne Rot', () => {

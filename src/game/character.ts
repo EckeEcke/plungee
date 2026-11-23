@@ -62,6 +62,8 @@ function eyeX(style: Look['eyes']): number {
 /** Augengröße (Weiß, Pupille) je nach Stil; beim Fallen wachsen sie */
 function eyeSize(style: Look['eyes'], fall: number): { er: number; pr: number } {
   switch (style) {
+    case 'pin':
+      return { er: 2.5 + fall * 0.8, pr: 0.45 + fall * 0.05 }
     case 'focus':
       return { er: 2.75 + fall * 0.5, pr: 2.1 + fall * 0.5 }
     case 'big':
@@ -290,10 +292,12 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, th: CharacterColors
       const eyeRadius = googly ? (smallEye ? 1.8 + fall * 0.4 : 2.6 + fall * 0.3) : er
       const pupilRadius = googly ? (smallEye ? 0.85 + fall * 0.1 : 1.2 + fall * 0.15) : pr
       const focus = look.eyes === 'focus'
-      const gazeScale = focus ? 0.15 : smallEye ? 0.7 : 1
+      const crossEyed = look.eyes === 'cross-eyed'
+      const gazeScale = focus ? 0.15 : crossEyed ? 0.25 : smallEye ? 0.7 : 1
       let gazeX = pose.ox * gazeScale
       let gazeY = pose.oy * gazeScale
-      if (focus) {
+      if (crossEyed) gazeX -= Math.sign(ex) * 0.9
+      if (focus || crossEyed) {
         // Keep a visible white rim even at the furthest gaze position.
         const distance = Math.hypot(gazeX, gazeY)
         const maxOffset = Math.max(0, eyeRadius - pupilRadius - 0.25)
@@ -301,6 +305,17 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, th: CharacterColors
           gazeX *= maxOffset / distance
           gazeY *= maxOffset / distance
         }
+      }
+      if (look.eyes === 'button') {
+        ctx.fillStyle = th.pupil
+        ctx.beginPath()
+        ctx.arc(cx, EYE_Y, eyeRadius, 0, TAU)
+        ctx.fill()
+        ctx.fillStyle = th.eyeWhite
+        ctx.beginPath()
+        ctx.arc(cx - 0.65 + gazeX * 0.15, EYE_Y - 0.75 + gazeY * 0.15, 0.55, 0, TAU)
+        ctx.fill()
+        continue
       }
       ctx.fillStyle = th.eyeWhite
       ctx.beginPath()
@@ -316,6 +331,28 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, th: CharacterColors
       ctx.beginPath()
       ctx.arc(cx + gazeX, EYE_Y + gazeY, pupilRadius, 0, TAU)
       ctx.fill()
+      if (look.eyes === 'skeptical') {
+        // Like Sleepy, but body-colored lids close in from both sides.
+        const cover = er * 0.7 * (1 - fall * 0.5)
+        const top = EYE_Y - er + cover
+        const bottom = EYE_Y + er - cover
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(cx, EYE_Y, er + 0.15, 0, TAU)
+        ctx.clip()
+        ctx.fillStyle = th.player
+        ctx.fillRect(cx - er - 0.2, EYE_Y - er - 0.2, er * 2 + 0.4, cover + 0.2)
+        ctx.fillRect(cx - er - 0.2, bottom, er * 2 + 0.4, cover + 0.2)
+        ctx.strokeStyle = th.outline
+        ctx.lineWidth = 0.9
+        ctx.beginPath()
+        ctx.moveTo(cx - er, top)
+        ctx.lineTo(cx + er, top)
+        ctx.moveTo(cx - er, bottom)
+        ctx.lineTo(cx + er, bottom)
+        ctx.stroke()
+        ctx.restore()
+      }
       if (look.eyes === 'sleepy') {
         // Oberlid: deckt die obere Hälfte ab, öffnet sich beim Fallen
         const cover = er * 2 * 0.5 * (1 - fall * 0.8)
